@@ -15,6 +15,7 @@ $email = htmlspecialchars($emailRaw, ENT_QUOTES, 'UTF-8');
 $reportAreas = [];
 $reportError = '';
 $reports = [];
+$groupDiagnostics = [];
 
 function reportes_value(array $row, array $candidateKeys, string $default = ''): string
 {
@@ -52,6 +53,18 @@ try {
 
     if (count($reportAreas) === 0) {
         $reportError = 'Tu cuenta no pertenece a un grupo con acceso a Reportes.';
+        try {
+            $groupDiagnostics = reportes_group_diagnostics($emailRaw);
+        } catch (Throwable $diagnosticError) {
+            $groupDiagnostics = [[
+                'area' => 'Diagnóstico',
+                'group' => 'Consulta de grupos',
+                'status' => 'error',
+                'members' => 0,
+                'matched' => false,
+            ]];
+            error_log('Reportes diagnóstico grupos: ' . $diagnosticError->getMessage());
+        }
     } else {
         foreach (reportes_list_items(300) as $row) {
             $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
@@ -107,7 +120,7 @@ $visibleAreas = $isAdministrator
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-repo-2">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-debug-1">
 </head>
 <body>
   <header class="reportes-header">
@@ -171,6 +184,42 @@ $visibleAreas = $isAdministrator
         </div>
         <span class="reportes-status">Revisar</span>
       </section>
+
+      <?php if (count($groupDiagnostics) > 0): ?>
+        <section class="diagnostic-card" aria-label="Diagnóstico de grupos de Reportes">
+          <div class="diagnostic-heading">
+            <div>
+              <span class="reportes-kicker">Diagnóstico temporal</span>
+              <h2>Lectura de grupos de SharePoint</h2>
+              <p>Esta información solo muestra el nombre del grupo, si SharePoint permite consultarlo, el número de miembros devueltos y si encontró tu cuenta.</p>
+            </div>
+          </div>
+          <div class="diagnostic-table-wrap">
+            <table class="diagnostic-table">
+              <thead>
+                <tr>
+                  <th>Área</th>
+                  <th>Grupo consultado</th>
+                  <th>Estado</th>
+                  <th>Miembros</th>
+                  <th>Tu cuenta</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($groupDiagnostics as $diagnostic): ?>
+                  <tr>
+                    <td><?= htmlspecialchars((string) ($diagnostic['area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string) ($diagnostic['group'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string) ($diagnostic['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= (int) ($diagnostic['members'] ?? 0) ?></td>
+                    <td><?= !empty($diagnostic['matched']) ? 'Encontrada' : 'No encontrada' ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      <?php endif; ?>
     <?php else: ?>
       <section class="reportes-heading">
         <div>
