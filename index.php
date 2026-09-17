@@ -5,15 +5,24 @@ declare(strict_types=1);
 // Único punto de integración con el Portal: reutilizar su sesión autenticada.
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-sharepoint.php';
+require_once __DIR__ . '/includes/reportes-write.php';
 portal_require_authentication();
 
 $user = portal_user();
-$name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF-8');
+$nameRaw = trim((string) ($user['name'] ?? 'Usuario'));
 $emailRaw = strtolower(trim((string) ($user['email'] ?? '')));
+$name = htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8');
 $email = htmlspecialchars($emailRaw, ENT_QUOTES, 'UTF-8');
+
+if (!isset($_SESSION['reportes_csrf']) || !is_string($_SESSION['reportes_csrf'])) {
+    $_SESSION['reportes_csrf'] = bin2hex(random_bytes(24));
+}
+$csrfToken = (string) $_SESSION['reportes_csrf'];
 
 $reportRoles = [];
 $reportError = '';
+$formError = '';
+$formWarnings = [];
 $reports = [];
 $groupDiagnostics = [];
 
@@ -27,10 +36,10 @@ function reportes_value(array $row, array $candidateKeys, string $default = ''):
 
     $normalized = [];
     foreach ($row as $key => $value) {
-        $normalized[strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $key))] = $value;
+        $normalized[strtolower((string) preg_replace('/[^a-z0-9]/i', '', (string) $key))] = $value;
     }
     foreach ($candidateKeys as $key) {
-        $needle = strtolower(preg_replace('/[^a-z0-9]/i', '', $key));
+        $needle = strtolower((string) preg_replace('/[^a-z0-9]/i', '', $key));
         if (!array_key_exists($needle, $normalized)) continue;
         $value = trim((string) ($normalized[$needle] ?? ''));
         if ($value !== '') return $value;
@@ -75,62 +84,133 @@ function reportes_row_visible(array $row, array $roles, string $email): bool
 
 try {
     $reportRoles = reportes_user_areas($emailRaw);
+} catch (Throwable $error) {
+    error_log('Reportes permisos: ' . $error->getMessage());
+    $reportError = 'No fue posible validar tus permisos de Reportes: ' . $error->getMessage();
+}
 
+$canCreate = reportes_role_enabled($reportRoles, 'Vendedores') || reportes_role_enabled($reportRoles, 'Administradores');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'crear_reporte') {
+    try {
+        if (!$canCreate) throw new RuntimeException('Tu cuenta no tiene permiso para crear reportes.');
+        if (!hash_equals($csrfToken, (string) ($_POST['csrf_token'] ?? ''))) {
+            throw new RuntimeException('La sesión del formulario expiró. Actualiza la página e inténtalo nuevamente.');
+        }
+
+        $tipo = trim((string) ($_POST['tipo_reporte'] ?? ''));
+        $descripcion = trim((string) ($_POST['descripcion'] ?? ''));
+        $cliente = trim((string) ($_POST['cliente_nombre'] ?? ''));
+        $contrato = trim((string) ($_POST['contrato'] ?? ''));
+        $ubicacion = trim((string) ($_POST['ubicacion'] ?? ''));
+        $prioridad = trim((string) ($_POST['prioridad'] ?? 'Normal'));
+
+        if (!in_array($tipo, ['Parque', 'Capillas'], true)) {
+            throw new RuntimeException('Selecciona un tipo de reporte válido.');
+        }
+        if ($descripcion === '') throw new RuntimeException('Describe el reporte antes de enviarlo.');
+        if (mb_strlen($descripcion) > 4000) throw new RuntimeException('La descripción es demasiado larga.');
+        if (!in_array($prioridad, ['Baja', 'Normal', 'Alta'], true)) $prioridad = 'Normal';
+
+        $area = $tipo;
+        $title = 'Reporte ' . $tipo . ' - ' . $nameRaw . ' - ' . date('Y-m-d H:i');
+
+        $created = reportes_create_item([
+            'Title' => $title,
+            'TipoReporte' => $tipo,
+            'Origen' => 'Portal',
+            'AreaAsignada' => $area,
+            'Ubicacion' => $ubicacion,
+            'Prioridad' => $prioridad,
+            'Estatus' => 'Pendiente',
+            'SolicitanteNombre' => $nameRaw,
+            'SolicitanteCorreo' => $emailRaw,
+            'SolicitanteArea' => 'Ventas',
+            'ClienteNombre' => $cliente,
+            'Contrato' => $contrato,
+            'Descripcion' => $descripcion,
+        ]);
+
+        $itemId = (int) ($created['Id'] ?? 0);
+        $folio = reportes_generate_folio($itemId);
+        reportes_update_item($itemId, ['Folio' => $folio]);
+
+        if (isset($_FILES['adjuntos']) && is_array($_FILES['adjuntos'])) {
+            $formWarnings = reportes_upload_posted_attachments($itemId, $_FILES['adjuntos']);
+        }
+
+        $_SESSION['reportes_flash'] = [
+            'type' => count($formWarnings) > 0 ? 'warning' : 'success',
+            'message' => 'Reporte ' . $folio . ' creado correctamente.',
+            'warnings' => $formWarnings,
+        ];
+        header('Location: /reportes-preview/?creado=' . rawurlencode($folio));
+        exit;
+    } catch (Throwable $error) {
+        error_log('Reportes crear: ' . $error->getMessage());
+        $formError = $error->getMessage();
+    }
+}
+
+$flash = $_SESSION['reportes_flash'] ?? null;
+unset($_SESSION['reportes_flash']);
+
+if ($reportError === '') {
     if (count($reportRoles) === 0) {
         $reportError = 'Tu cuenta no pertenece a un grupo con acceso a Reportes.';
         try {
             $groupDiagnostics = reportes_group_diagnostics($emailRaw);
         } catch (Throwable $diagnosticError) {
-            $groupDiagnostics = [[
-                'area' => 'Diagnóstico',
-                'group' => 'Consulta de grupos',
-                'status' => 'error',
-                'members' => 0,
-                'matched' => false,
-            ]];
             error_log('Reportes diagnóstico grupos: ' . $diagnosticError->getMessage());
         }
     } else {
-        foreach (reportes_list_items(300) as $row) {
-            if (!reportes_row_visible($row, $reportRoles, $emailRaw)) continue;
+        try {
+            foreach (reportes_list_items(300) as $row) {
+                if (!reportes_row_visible($row, $reportRoles, $emailRaw)) continue;
 
-            $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
-            $itemId = (int) ($row['Id'] ?? $row['ID'] ?? 0);
-            $title = reportes_value($row, ['Title', 'Titulo', 'Título', 'Nombre'], 'Reporte sin título');
-            $type = reportes_value($row, ['TipoReporte', 'Tipo_x0020_Reporte', 'Tipo'], 'Reporte');
-            $description = reportes_value($row, ['Descripcion', 'Descripción', 'Description', 'Comentarios'], '');
-            $url = reportes_value($row, ['URL', 'Url', 'Liga', 'Enlace', 'Link'], '');
-            $attachments = [];
+                $itemId = (int) ($row['Id'] ?? $row['ID'] ?? 0);
+                $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
+                $title = reportes_value($row, ['Title', 'Titulo', 'Título', 'Nombre'], 'Reporte sin título');
+                $folio = reportes_value($row, ['Folio'], $itemId > 0 ? '#' . $itemId : 'Sin folio');
+                $type = reportes_value($row, ['TipoReporte', 'Tipo_x0020_Reporte', 'Tipo'], 'Reporte');
+                $status = reportes_value($row, ['Estatus'], 'Pendiente');
+                $priority = reportes_value($row, ['Prioridad'], 'Normal');
+                $description = reportes_value($row, ['Descripcion', 'Descripción', 'Description', 'Comentarios'], '');
+                $requester = reportes_value($row, ['SolicitanteNombre', 'Solicitante Nombre'], '');
+                $createdDate = reportes_value($row, ['Created'], '');
+                $attachments = [];
 
-            if ($itemId > 0 && !empty($row['Attachments'])) {
-                try {
-                    $attachments = reportes_item_attachments($itemId);
-                } catch (Throwable $attachmentError) {
-                    error_log('Reportes adjuntos item ' . $itemId . ': ' . $attachmentError->getMessage());
+                if ($itemId > 0 && !empty($row['Attachments'])) {
+                    try {
+                        $attachments = reportes_item_attachments($itemId);
+                    } catch (Throwable $attachmentError) {
+                        error_log('Reportes adjuntos item ' . $itemId . ': ' . $attachmentError->getMessage());
+                    }
                 }
+
+                $reports[] = [
+                    'id' => $itemId,
+                    'folio' => $folio,
+                    'title' => $title,
+                    'type' => $type,
+                    'area' => $area,
+                    'status' => $status,
+                    'priority' => $priority,
+                    'description' => $description,
+                    'requester' => $requester,
+                    'created' => $createdDate,
+                    'attachments' => $attachments,
+                ];
             }
 
-            $reports[] = [
-                'id' => $itemId,
-                'title' => $title,
-                'type' => $type,
-                'area' => $area,
-                'description' => $description,
-                'url' => $url,
-                'attachments' => $attachments,
-            ];
+            usort($reports, static function (array $a, array $b): int {
+                return ((int) ($b['id'] ?? 0)) <=> ((int) ($a['id'] ?? 0));
+            });
+        } catch (Throwable $error) {
+            error_log('Reportes listado: ' . $error->getMessage());
+            $reportError = 'No fue posible consultar la lista de Reportes: ' . $error->getMessage();
         }
-
-        usort($reports, static function (array $a, array $b): int {
-            $areaCompare = strcasecmp((string) $a['area'], (string) $b['area']);
-            return $areaCompare !== 0
-                ? $areaCompare
-                : strcasecmp((string) $a['title'], (string) $b['title']);
-        });
     }
-} catch (Throwable $error) {
-    error_log('Reportes SharePoint: ' . $error->getMessage());
-    $reportError = 'No fue posible consultar Reportes: ' . $error->getMessage();
 }
 
 $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
@@ -144,7 +224,7 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-roles-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-create-1">
 </head>
 <body>
   <header class="reportes-header">
@@ -163,23 +243,15 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
           <span>Vista previa interna</span>
         </div>
       </div>
-
       <div class="reportes-header-context">Herramienta en desarrollo</div>
-
       <div class="reportes-header-actions">
         <a class="header-action" href="/">Volver al Portal</a>
         <details class="account-menu">
           <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="8" r="4" fill="currentColor" />
-              <path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor" />
-            </svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor" /><path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor" /></svg>
           </summary>
           <div class="account-menu-panel">
-            <div class="account-menu-info">
-              <strong><?= $name ?></strong>
-              <span><?= $email ?></span>
-            </div>
+            <div class="account-menu-info"><strong><?= $name ?></strong><span><?= $email ?></span></div>
             <a class="account-menu-logout" href="/logout.php">Cerrar sesión</a>
           </div>
         </details>
@@ -191,7 +263,7 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
     <section class="reportes-hero">
       <span class="reportes-kicker">Vista previa</span>
       <h1>Consulta y seguimiento de reportes</h1>
-      <p>Los reportes visibles se obtienen directamente de SharePoint de acuerdo con los grupos asignados a tu cuenta.</p>
+      <p>Los reportes se registran y consultan directamente en SharePoint de acuerdo con los permisos de cada usuario.</p>
       <div class="reportes-meta">
         <div><span>Usuario</span><strong><?= $name ?></strong></div>
         <div><span>Cuenta</span><strong><?= $email ?></strong></div>
@@ -199,95 +271,66 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
       </div>
     </section>
 
+    <?php if (is_array($flash)): ?>
+      <section class="flash-card <?= (($flash['type'] ?? '') === 'warning') ? 'flash-warning' : 'flash-success' ?>">
+        <strong><?= htmlspecialchars((string) ($flash['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+        <?php foreach (($flash['warnings'] ?? []) as $warning): ?>
+          <span><?= htmlspecialchars((string) $warning, ENT_QUOTES, 'UTF-8') ?></span>
+        <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($canCreate): ?>
+      <section class="create-card">
+        <div class="create-heading">
+          <div><span class="reportes-kicker">Captura</span><h2>Nuevo reporte</h2><p>Registra una incidencia para Parque o Capillas. Tu nombre y correo se tomarán automáticamente de la sesión.</p></div>
+        </div>
+
+        <?php if ($formError !== ''): ?>
+          <div class="form-error"><?= htmlspecialchars($formError, ENT_QUOTES, 'UTF-8') ?></div>
+        <?php endif; ?>
+
+        <form class="report-form" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="action" value="crear_reporte">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+
+          <label><span>Tipo de reporte *</span><select name="tipo_reporte" required><option value="">Selecciona...</option><option value="Parque" <?= (($_POST['tipo_reporte'] ?? '') === 'Parque') ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= (($_POST['tipo_reporte'] ?? '') === 'Capillas') ? 'selected' : '' ?>>Capillas</option></select></label>
+          <label><span>Prioridad</span><select name="prioridad"><option value="Normal">Normal</option><option value="Alta">Alta</option><option value="Baja">Baja</option></select></label>
+          <label><span>Cliente</span><input type="text" name="cliente_nombre" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['cliente_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Nombre del cliente"></label>
+          <label><span>Contrato</span><input type="text" name="contrato" maxlength="80" value="<?= htmlspecialchars((string) ($_POST['contrato'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Número de contrato"></label>
+          <label class="form-wide"><span>Ubicación</span><input type="text" name="ubicacion" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['ubicacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Sección, lote, sala o referencia"></label>
+          <label class="form-wide"><span>Descripción del reporte *</span><textarea name="descripcion" rows="5" maxlength="4000" required placeholder="Describe claramente qué sucedió y qué necesitas que se revise."><?= htmlspecialchars((string) ($_POST['descripcion'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea></label>
+          <label class="form-wide"><span>Adjuntos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Opcional. Hasta 15 MB por archivo.</small></label>
+
+          <div class="form-actions form-wide"><button type="submit">Enviar reporte</button></div>
+        </form>
+      </section>
+    <?php endif; ?>
+
     <?php if ($reportError !== ''): ?>
       <section class="reportes-note reportes-note-error" role="alert">
-        <div>
-          <span class="reportes-kicker">Estado</span>
-          <h2>Acceso a Reportes no disponible</h2>
-          <p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p>
-        </div>
+        <div><span class="reportes-kicker">Estado</span><h2>Acceso a Reportes no disponible</h2><p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p></div>
         <span class="reportes-status">Revisar</span>
       </section>
-
-      <?php if (count($groupDiagnostics) > 0): ?>
-        <section class="diagnostic-card" aria-label="Diagnóstico de grupos de Reportes">
-          <div class="diagnostic-heading">
-            <div>
-              <span class="reportes-kicker">Diagnóstico temporal</span>
-              <h2>Lectura de grupos de SharePoint</h2>
-              <p>Esta información solo muestra el nombre del grupo, si SharePoint permite consultarlo, el número de miembros devueltos y si encontró tu cuenta.</p>
-            </div>
-          </div>
-          <div class="diagnostic-table-wrap">
-            <table class="diagnostic-table">
-              <thead>
-                <tr>
-                  <th>Área</th>
-                  <th>Grupo consultado</th>
-                  <th>Estado</th>
-                  <th>Miembros</th>
-                  <th>Tu cuenta</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($groupDiagnostics as $diagnostic): ?>
-                  <tr>
-                    <td><?= htmlspecialchars((string) ($diagnostic['area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars((string) ($diagnostic['group'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars((string) ($diagnostic['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= (int) ($diagnostic['members'] ?? 0) ?></td>
-                    <td><?= !empty($diagnostic['matched']) ? 'Encontrada' : 'No encontrada' ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      <?php endif; ?>
     <?php else: ?>
       <section class="reportes-heading">
-        <div>
-          <span class="reportes-kicker">SharePoint</span>
-          <h2>Reportes disponibles</h2>
-        </div>
+        <div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div>
         <span class="reportes-status reportes-status-ok"><?= count($reports) ?> encontrados</span>
       </section>
 
       <?php if (count($reports) === 0): ?>
-        <section class="reportes-note">
-          <div>
-            <span class="reportes-kicker">Sin registros</span>
-            <h2>No hay reportes disponibles para tus accesos</h2>
-            <p>La conexión con SharePoint funciona, pero no se encontraron registros visibles con tu configuración actual.</p>
-          </div>
-          <span class="reportes-status">0 reportes</span>
-        </section>
+        <section class="reportes-note"><div><span class="reportes-kicker">Sin registros</span><h2>No hay reportes disponibles para tus accesos</h2><p>La conexión con SharePoint funciona. Cuando se registre el primer reporte aparecerá aquí.</p></div><span class="reportes-status">0 reportes</span></section>
       <?php else: ?>
         <section class="report-list" aria-label="Reportes disponibles">
           <?php foreach ($reports as $report): ?>
             <article class="report-item">
               <div class="report-item-top">
-                <div>
-                  <span class="report-area"><?= htmlspecialchars((string) $report['area'], ENT_QUOTES, 'UTF-8') ?></span>
-                  <h3><?= htmlspecialchars((string) $report['title'], ENT_QUOTES, 'UTF-8') ?></h3>
-                </div>
-                <span class="report-type"><?= htmlspecialchars((string) $report['type'], ENT_QUOTES, 'UTF-8') ?></span>
+                <div><span class="report-area"><?= htmlspecialchars((string) $report['area'], ENT_QUOTES, 'UTF-8') ?></span><h3><?= htmlspecialchars((string) $report['folio'], ENT_QUOTES, 'UTF-8') ?></h3></div>
+                <span class="report-type"><?= htmlspecialchars((string) $report['status'], ENT_QUOTES, 'UTF-8') ?></span>
               </div>
-
-              <?php if ((string) $report['description'] !== ''): ?>
-                <p class="report-description"><?= htmlspecialchars((string) $report['description'], ENT_QUOTES, 'UTF-8') ?></p>
-              <?php endif; ?>
-
-              <?php if ((string) $report['url'] !== '' || count($report['attachments']) > 0): ?>
-                <div class="report-actions">
-                  <?php if ((string) $report['url'] !== ''): ?>
-                    <a href="<?= htmlspecialchars((string) $report['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Abrir reporte</a>
-                  <?php endif; ?>
-                  <?php foreach ($report['attachments'] as $attachment): ?>
-                    <a href="<?= htmlspecialchars((string) $attachment['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string) $attachment['name'], ENT_QUOTES, 'UTF-8') ?></a>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
+              <div class="report-summary"><span><?= htmlspecialchars((string) $report['type'], ENT_QUOTES, 'UTF-8') ?></span><span>Prioridad: <?= htmlspecialchars((string) $report['priority'], ENT_QUOTES, 'UTF-8') ?></span><?php if ((string) $report['requester'] !== ''): ?><span>Solicitante: <?= htmlspecialchars((string) $report['requester'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></div>
+              <?php if ((string) $report['description'] !== ''): ?><p class="report-description"><?= nl2br(htmlspecialchars((string) $report['description'], ENT_QUOTES, 'UTF-8')) ?></p><?php endif; ?>
+              <?php if (count($report['attachments']) > 0): ?><div class="report-actions"><?php foreach ($report['attachments'] as $attachment): ?><a href="<?= htmlspecialchars((string) $attachment['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string) $attachment['name'], ENT_QUOTES, 'UTF-8') ?></a><?php endforeach; ?></div><?php endif; ?>
             </article>
           <?php endforeach; ?>
         </section>
@@ -295,11 +338,7 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
     <?php endif; ?>
 
     <section class="reportes-note">
-      <div>
-        <span class="reportes-kicker">Integración</span>
-        <h2>Lista SharePoint conectada</h2>
-        <p>Fuente: Centro de Control Dirección / BI_Reportes. Los permisos pertenecen a esta herramienta y se resuelven con sus grupos de SharePoint.</p>
-      </div>
+      <div><span class="reportes-kicker">Integración</span><h2>Lista SharePoint conectada</h2><p>Fuente: Centro de Control Dirección / BI_Reportes. Reportes mantiene su propia lógica de permisos y datos.</p></div>
       <span class="reportes-status reportes-status-ok">Conectado</span>
     </section>
   </main>
