@@ -55,12 +55,6 @@ function reportes_role_enabled(array $roles, string $role): bool
     return false;
 }
 
-/**
- * Reglas de visibilidad:
- * - Administradores: todos los reportes.
- * - Parque / Capillas: reportes asignados a su AreaAsignada.
- * - Vendedores: únicamente sus propios reportes, identificados por SolicitanteCorreo.
- */
 function reportes_row_visible(array $row, array $roles, string $email): bool
 {
     if (reportes_role_enabled($roles, 'Administradores')) return true;
@@ -136,17 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         reportes_update_item($itemId, ['Folio' => $folio]);
 
         if (isset($_FILES['adjuntos']) && is_array($_FILES['adjuntos'])) {
-            $formWarnings = array_merge(
-                $formWarnings,
-                reportes_upload_posted_attachments($itemId, $_FILES['adjuntos'])
-            );
+            $formWarnings = array_merge($formWarnings, reportes_upload_posted_attachments($itemId, $_FILES['adjuntos']));
         }
-
         if (isset($_FILES['foto_camara']) && is_array($_FILES['foto_camara'])) {
-            $formWarnings = array_merge(
-                $formWarnings,
-                reportes_upload_posted_attachments($itemId, $_FILES['foto_camara'])
-            );
+            $formWarnings = array_merge($formWarnings, reportes_upload_posted_attachments($itemId, $_FILES['foto_camara']));
         }
 
         $_SESSION['reportes_flash'] = [
@@ -180,7 +167,6 @@ if ($reportError === '') {
 
                 $itemId = (int) ($row['Id'] ?? $row['ID'] ?? 0);
                 $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
-                $title = reportes_value($row, ['Title', 'Titulo', 'Título', 'Nombre'], 'Reporte sin título');
                 $folio = reportes_value($row, ['Folio'], $itemId > 0 ? '#' . $itemId : 'Sin folio');
                 $type = reportes_value($row, ['TipoReporte', 'Tipo_x0020_Reporte', 'Tipo'], 'Reporte');
                 $status = reportes_value($row, ['Estatus'], 'Pendiente');
@@ -201,7 +187,6 @@ if ($reportError === '') {
                 $reports[] = [
                     'id' => $itemId,
                     'folio' => $folio,
-                    'title' => $title,
                     'type' => $type,
                     'area' => $area,
                     'status' => $status,
@@ -234,36 +219,23 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-camera-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-manage-1">
 </head>
 <body>
   <header class="reportes-header">
     <div class="shell reportes-header-inner">
       <div class="reportes-brand">
         <div class="reportes-logo" aria-hidden="true">
-          <svg viewBox="0 0 64 64" role="img">
-            <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-              <path d="M32 6v12M32 46v12M6 32h12M46 32h12M13.6 13.6l8.5 8.5M41.9 41.9l8.5 8.5M50.4 13.6l-8.5 8.5M22.1 41.9l-8.5 8.5"/>
-            </g>
-            <circle cx="32" cy="32" r="9" fill="currentColor"/>
-          </svg>
+          <svg viewBox="0 0 64 64" role="img"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M32 6v12M32 46v12M6 32h12M46 32h12M13.6 13.6l8.5 8.5M41.9 41.9l8.5 8.5M50.4 13.6l-8.5 8.5M22.1 41.9l-8.5 8.5"/></g><circle cx="32" cy="32" r="9" fill="currentColor"/></svg>
         </div>
-        <div class="reportes-identity">
-          <strong>Reportes</strong>
-          <span>Vista previa interna</span>
-        </div>
+        <div class="reportes-identity"><strong>Reportes</strong><span>Vista previa interna</span></div>
       </div>
       <div class="reportes-header-context">Herramienta en desarrollo</div>
       <div class="reportes-header-actions">
         <a class="header-action" href="/">Volver al Portal</a>
         <details class="account-menu">
-          <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor" /><path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor" /></svg>
-          </summary>
-          <div class="account-menu-panel">
-            <div class="account-menu-info"><strong><?= $name ?></strong><span><?= $email ?></span></div>
-            <a class="account-menu-logout" href="/logout.php">Cerrar sesión</a>
-          </div>
+          <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor"/></svg></summary>
+          <div class="account-menu-panel"><div class="account-menu-info"><strong><?= $name ?></strong><span><?= $email ?></span></div><a class="account-menu-logout" href="/logout.php">Cerrar sesión</a></div>
         </details>
       </div>
     </div>
@@ -271,39 +243,21 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
 
   <main class="shell reportes-main">
     <section class="reportes-hero">
-      <span class="reportes-kicker">Vista previa</span>
-      <h1>Consulta y seguimiento de reportes</h1>
+      <span class="reportes-kicker">Vista previa</span><h1>Consulta y seguimiento de reportes</h1>
       <p>Los reportes se registran y consultan directamente en SharePoint de acuerdo con los permisos de cada usuario.</p>
-      <div class="reportes-meta">
-        <div><span>Usuario</span><strong><?= $name ?></strong></div>
-        <div><span>Cuenta</span><strong><?= $email ?></strong></div>
-        <div><span>Accesos autorizados</span><strong><?= htmlspecialchars(count($visibleRoles) > 0 ? implode(', ', $visibleRoles) : 'Sin acceso', ENT_QUOTES, 'UTF-8') ?></strong></div>
-      </div>
+      <div class="reportes-meta"><div><span>Usuario</span><strong><?= $name ?></strong></div><div><span>Cuenta</span><strong><?= $email ?></strong></div><div><span>Accesos autorizados</span><strong><?= htmlspecialchars(count($visibleRoles) > 0 ? implode(', ', $visibleRoles) : 'Sin acceso', ENT_QUOTES, 'UTF-8') ?></strong></div></div>
     </section>
 
     <?php if (is_array($flash)): ?>
-      <section class="flash-card <?= (($flash['type'] ?? '') === 'warning') ? 'flash-warning' : 'flash-success' ?>">
-        <strong><?= htmlspecialchars((string) ($flash['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-        <?php foreach (($flash['warnings'] ?? []) as $warning): ?>
-          <span><?= htmlspecialchars((string) $warning, ENT_QUOTES, 'UTF-8') ?></span>
-        <?php endforeach; ?>
-      </section>
+      <section class="flash-card <?= (($flash['type'] ?? '') === 'warning') ? 'flash-warning' : 'flash-success' ?>"><strong><?= htmlspecialchars((string) ($flash['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><?php foreach (($flash['warnings'] ?? []) as $warning): ?><span><?= htmlspecialchars((string) $warning, ENT_QUOTES, 'UTF-8') ?></span><?php endforeach; ?></section>
     <?php endif; ?>
 
     <?php if ($canCreate): ?>
       <section class="create-card">
-        <div class="create-heading">
-          <div><span class="reportes-kicker">Captura</span><h2>Nuevo reporte</h2><p>Registra una incidencia para Parque o Capillas. Tu nombre y correo se tomarán automáticamente de la sesión.</p></div>
-        </div>
-
-        <?php if ($formError !== ''): ?>
-          <div class="form-error"><?= htmlspecialchars($formError, ENT_QUOTES, 'UTF-8') ?></div>
-        <?php endif; ?>
-
+        <div class="create-heading"><div><span class="reportes-kicker">Captura</span><h2>Nuevo reporte</h2><p>Registra una incidencia para Parque o Capillas. Tu nombre y correo se tomarán automáticamente de la sesión.</p></div></div>
+        <?php if ($formError !== ''): ?><div class="form-error"><?= htmlspecialchars($formError, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
         <form class="report-form" method="post" enctype="multipart/form-data">
-          <input type="hidden" name="action" value="crear_reporte">
-          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
-
+          <input type="hidden" name="action" value="crear_reporte"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
           <label><span>Tipo de reporte *</span><select name="tipo_reporte" required><option value="">Selecciona...</option><option value="Parque" <?= (($_POST['tipo_reporte'] ?? '') === 'Parque') ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= (($_POST['tipo_reporte'] ?? '') === 'Capillas') ? 'selected' : '' ?>>Capillas</option></select></label>
           <label><span>Prioridad</span><select name="prioridad"><option value="Normal">Normal</option><option value="Alta">Alta</option><option value="Baja">Baja</option></select></label>
           <label><span>Cliente</span><input type="text" name="cliente_nombre" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['cliente_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Nombre del cliente"></label>
@@ -312,46 +266,35 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
           <label class="form-wide"><span>Descripción del reporte *</span><textarea name="descripcion" rows="5" maxlength="4000" required placeholder="Describe claramente qué sucedió y qué necesitas que se revise."><?= htmlspecialchars((string) ($_POST['descripcion'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea></label>
           <label class="form-wide"><span>Adjuntos / seleccionar archivos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Opcional. Puedes seleccionar varias fotos o documentos. Hasta 15 MB por archivo.</small></label>
           <label class="form-wide"><span>Tomar foto con cámara</span><input type="file" name="foto_camara" accept="image/*" capture="environment"><small>En celular abre la cámara trasera para tomar una foto y adjuntarla directamente al reporte.</small></label>
-
           <div class="form-actions form-wide"><button type="submit">Enviar reporte</button></div>
         </form>
       </section>
     <?php endif; ?>
 
     <?php if ($reportError !== ''): ?>
-      <section class="reportes-note reportes-note-error" role="alert">
-        <div><span class="reportes-kicker">Estado</span><h2>Acceso a Reportes no disponible</h2><p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p></div>
-        <span class="reportes-status">Revisar</span>
-      </section>
+      <section class="reportes-note reportes-note-error" role="alert"><div><span class="reportes-kicker">Estado</span><h2>Acceso a Reportes no disponible</h2><p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p></div><span class="reportes-status">Revisar</span></section>
     <?php else: ?>
-      <section class="reportes-heading">
-        <div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div>
-        <span class="reportes-status reportes-status-ok"><?= count($reports) ?> encontrados</span>
-      </section>
-
+      <section class="reportes-heading"><div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div><span class="reportes-status reportes-status-ok"><?= count($reports) ?> encontrados</span></section>
       <?php if (count($reports) === 0): ?>
         <section class="reportes-note"><div><span class="reportes-kicker">Sin registros</span><h2>No hay reportes disponibles para tus accesos</h2><p>La conexión con SharePoint funciona. Cuando se registre el primer reporte aparecerá aquí.</p></div><span class="reportes-status">0 reportes</span></section>
       <?php else: ?>
         <section class="report-list" aria-label="Reportes disponibles">
           <?php foreach ($reports as $report): ?>
             <article class="report-item">
-              <div class="report-item-top">
-                <div><span class="report-area"><?= htmlspecialchars((string) $report['area'], ENT_QUOTES, 'UTF-8') ?></span><h3><?= htmlspecialchars((string) $report['folio'], ENT_QUOTES, 'UTF-8') ?></h3></div>
-                <span class="report-type"><?= htmlspecialchars((string) $report['status'], ENT_QUOTES, 'UTF-8') ?></span>
-              </div>
+              <div class="report-item-top"><div><span class="report-area"><?= htmlspecialchars((string) $report['area'], ENT_QUOTES, 'UTF-8') ?></span><h3><?= htmlspecialchars((string) $report['folio'], ENT_QUOTES, 'UTF-8') ?></h3></div><span class="report-type"><?= htmlspecialchars((string) $report['status'], ENT_QUOTES, 'UTF-8') ?></span></div>
               <div class="report-summary"><span><?= htmlspecialchars((string) $report['type'], ENT_QUOTES, 'UTF-8') ?></span><span>Prioridad: <?= htmlspecialchars((string) $report['priority'], ENT_QUOTES, 'UTF-8') ?></span><?php if ((string) $report['requester'] !== ''): ?><span>Solicitante: <?= htmlspecialchars((string) $report['requester'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></div>
               <?php if ((string) $report['description'] !== ''): ?><p class="report-description"><?= nl2br(htmlspecialchars((string) $report['description'], ENT_QUOTES, 'UTF-8')) ?></p><?php endif; ?>
-              <?php if (count($report['attachments']) > 0): ?><div class="report-actions"><?php foreach ($report['attachments'] as $attachment): ?><a href="<?= htmlspecialchars((string) $attachment['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string) $attachment['name'], ENT_QUOTES, 'UTF-8') ?></a><?php endforeach; ?></div><?php endif; ?>
+              <div class="report-actions">
+                <a href="/reportes-preview/gestionar.php?id=<?= (int) $report['id'] ?>">Ver / gestionar</a>
+                <?php foreach ($report['attachments'] as $attachment): ?><a href="<?= htmlspecialchars((string) $attachment['url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string) $attachment['name'], ENT_QUOTES, 'UTF-8') ?></a><?php endforeach; ?>
+              </div>
             </article>
           <?php endforeach; ?>
         </section>
       <?php endif; ?>
     <?php endif; ?>
 
-    <section class="reportes-note">
-      <div><span class="reportes-kicker">Integración</span><h2>Lista SharePoint conectada</h2><p>Fuente: Centro de Control Dirección / BI_Reportes. Reportes mantiene su propia lógica de permisos y datos.</p></div>
-      <span class="reportes-status reportes-status-ok">Conectado</span>
-    </section>
+    <section class="reportes-note"><div><span class="reportes-kicker">Integración</span><h2>Lista SharePoint conectada</h2><p>Fuente: Centro de Control Dirección / BI_Reportes. Reportes mantiene su propia lógica de permisos y datos.</p></div><span class="reportes-status reportes-status-ok">Conectado</span></section>
   </main>
 </body>
 </html>
