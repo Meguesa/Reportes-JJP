@@ -2,14 +2,6 @@ name: Publicar Reportes en cPanel
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'index.php'
-      - 'styles-reportes.css'
-      - 'includes/**'
-      - '.github/workflows/deploy-cpanel.yml'
 
 permissions:
   contents: read
@@ -42,6 +34,19 @@ jobs:
           php -l index.php
           find includes -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Validar credenciales de publicación
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${FTP_SERVER:-}"
+          test -n "${FTP_USERNAME:-}"
+          test -n "${FTP_PASSWORD:-}"
+          echo "Credenciales FTPS presentes."
+
       - name: Publicar Reportes en ruta temporal
         shell: bash
         env:
@@ -50,9 +55,6 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           set -euo pipefail
-          : "${FTP_SERVER:?FTP_SERVER no configurado}"
-          : "${FTP_USERNAME:?FTP_USERNAME no configurado}"
-          : "${FTP_PASSWORD:?FTP_PASSWORD no configurado}"
 
           upload_file() {
             local local_file="$1"
