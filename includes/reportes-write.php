@@ -142,6 +142,15 @@ function reportes_map_fields(array $canonicalValues, array $requiredCanonical = 
 /** @param array<string,mixed> $canonicalValues @return array<string,mixed> */
 function reportes_create_item(array $canonicalValues): array
 {
+    // Los reportes de Capillas sólo requieren la descripción de la incidencia.
+    // Limpiamos cualquier dato que pudiera quedar en el navegador si el usuario
+    // cambió el tipo desde Parque antes de enviar el formulario.
+    if (strcasecmp(trim((string) ($canonicalValues['TipoReporte'] ?? '')), 'Capillas') === 0) {
+        $canonicalValues['ClienteNombre'] = '';
+        $canonicalValues['Contrato'] = '';
+        $canonicalValues['Ubicacion'] = '';
+    }
+
     $session = reportes_sharepoint_session();
     $required = ['Title', 'TipoReporte', 'AreaAsignada', 'Estatus', 'SolicitanteCorreo', 'Descripcion'];
     $payload = reportes_map_fields($canonicalValues, $required);
