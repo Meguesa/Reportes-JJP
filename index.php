@@ -136,7 +136,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         reportes_update_item($itemId, ['Folio' => $folio]);
 
         if (isset($_FILES['adjuntos']) && is_array($_FILES['adjuntos'])) {
-            $formWarnings = reportes_upload_posted_attachments($itemId, $_FILES['adjuntos']);
+            $formWarnings = array_merge(
+                $formWarnings,
+                reportes_upload_posted_attachments($itemId, $_FILES['adjuntos'])
+            );
+        }
+
+        if (isset($_FILES['foto_camara']) && is_array($_FILES['foto_camara'])) {
+            $formWarnings = array_merge(
+                $formWarnings,
+                reportes_upload_posted_attachments($itemId, $_FILES['foto_camara'])
+            );
         }
 
         $_SESSION['reportes_flash'] = [
@@ -224,7 +234,7 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-create-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-camera-1">
 </head>
 <body>
   <header class="reportes-header">
@@ -300,7 +310,8 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
           <label><span>Contrato</span><input type="text" name="contrato" maxlength="80" value="<?= htmlspecialchars((string) ($_POST['contrato'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Número de contrato"></label>
           <label class="form-wide"><span>Ubicación</span><input type="text" name="ubicacion" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['ubicacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Sección, lote, sala o referencia"></label>
           <label class="form-wide"><span>Descripción del reporte *</span><textarea name="descripcion" rows="5" maxlength="4000" required placeholder="Describe claramente qué sucedió y qué necesitas que se revise."><?= htmlspecialchars((string) ($_POST['descripcion'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea></label>
-          <label class="form-wide"><span>Adjuntos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Opcional. Hasta 15 MB por archivo.</small></label>
+          <label class="form-wide"><span>Adjuntos / seleccionar archivos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Opcional. Puedes seleccionar varias fotos o documentos. Hasta 15 MB por archivo.</small></label>
+          <label class="form-wide"><span>Tomar foto con cámara</span><input type="file" name="foto_camara" accept="image/*" capture="environment"><small>En celular abre la cámara trasera para tomar una foto y adjuntarla directamente al reporte.</small></label>
 
           <div class="form-actions form-wide"><button type="submit">Enviar reporte</button></div>
         </form>
