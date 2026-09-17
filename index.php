@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// La autenticación pertenece al Portal; la herramienta Reportes reutiliza esa sesión.
+// Único punto de integración con el Portal: reutilizar su sesión autenticada.
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-sharepoint.php';
 portal_require_authentication();
@@ -107,40 +107,45 @@ $visibleAreas = $isAdministrator
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/assets/css/brand.css?v=20260823-map-header-1">
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-repo-1">
-  <link rel="stylesheet" href="/assets/css/account-menu.css">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-repo-2">
 </head>
 <body>
-  <header class="brand-header">
-    <div class="brand-main">
-      <div class="shell brand-main-inner">
-        <div class="portal-header-left">
-          <img class="portal-header-logo" src="/mapa/assets/logo.jpg" alt="Jardines de Juan Pablo">
-          <div class="portal-identity">
-            <strong>Reportes</strong>
-            <span>Vista previa interna</span>
-          </div>
+  <header class="reportes-header">
+    <div class="shell reportes-header-inner">
+      <div class="reportes-brand">
+        <div class="reportes-logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img">
+            <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+              <path d="M32 6v12M32 46v12M6 32h12M46 32h12M13.6 13.6l8.5 8.5M41.9 41.9l8.5 8.5M50.4 13.6l-8.5 8.5M22.1 41.9l-8.5 8.5"/>
+            </g>
+            <circle cx="32" cy="32" r="9" fill="currentColor"/>
+          </svg>
         </div>
-        <div class="portal-header-context">Herramienta en desarrollo</div>
-        <div class="portal-header-actions">
-          <a class="header-action" href="/">Volver al Portal</a>
-          <details class="account-menu">
-            <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" fill="currentColor" />
-                <path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor" />
-              </svg>
-            </summary>
-            <div class="account-menu-panel">
-              <div class="account-menu-info">
-                <strong><?= $name ?></strong>
-                <span><?= $email ?></span>
-              </div>
-              <a class="account-menu-logout" href="/logout.php">Cerrar sesión</a>
+        <div class="reportes-identity">
+          <strong>Reportes</strong>
+          <span>Vista previa interna</span>
+        </div>
+      </div>
+
+      <div class="reportes-header-context">Herramienta en desarrollo</div>
+
+      <div class="reportes-header-actions">
+        <a class="header-action" href="/">Volver al Portal</a>
+        <details class="account-menu">
+          <summary class="account-trigger" aria-label="Abrir menú de usuario" title="<?= $name ?>">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" fill="currentColor" />
+              <path d="M4 20c0-4.1 3.6-6 8-6s8 1.9 8 6v1H4z" fill="currentColor" />
+            </svg>
+          </summary>
+          <div class="account-menu-panel">
+            <div class="account-menu-info">
+              <strong><?= $name ?></strong>
+              <span><?= $email ?></span>
             </div>
-          </details>
-        </div>
+            <a class="account-menu-logout" href="/logout.php">Cerrar sesión</a>
+          </div>
+        </details>
       </div>
     </div>
   </header>
