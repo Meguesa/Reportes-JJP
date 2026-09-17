@@ -173,6 +173,9 @@ if ($reportError === '') {
                 $priority = reportes_value($row, ['Prioridad'], 'Normal');
                 $description = reportes_value($row, ['Descripcion', 'Descripción', 'Description', 'Comentarios'], '');
                 $requester = reportes_value($row, ['SolicitanteNombre', 'Solicitante Nombre'], '');
+                $client = reportes_value($row, ['ClienteNombre', 'Cliente Nombre'], '');
+                $contract = reportes_value($row, ['Contrato'], '');
+                $location = reportes_value($row, ['Ubicacion', 'Ubicación'], '');
                 $createdDate = reportes_value($row, ['Created'], '');
                 $attachments = [];
 
@@ -193,6 +196,9 @@ if ($reportError === '') {
                     'priority' => $priority,
                     'description' => $description,
                     'requester' => $requester,
+                    'client' => $client,
+                    'contract' => $contract,
+                    'location' => $location,
                     'created' => $createdDate,
                     'attachments' => $attachments,
                 ];
@@ -211,6 +217,55 @@ if ($reportError === '') {
 $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
     ? ['Vendedores', 'Parque', 'Capillas', 'Administradores']
     : $reportRoles;
+
+$filterSearch = trim((string) ($_GET['q'] ?? ''));
+$filterStatus = trim((string) ($_GET['estatus'] ?? ''));
+$filterArea = trim((string) ($_GET['area'] ?? ''));
+$filterPriority = trim((string) ($_GET['prioridad'] ?? ''));
+$allowedStatusFilters = ['', 'Pendiente', 'En proceso', 'Solucionado', 'Cerrado'];
+$allowedAreaFilters = ['', 'Parque', 'Capillas'];
+$allowedPriorityFilters = ['', 'Baja', 'Normal', 'Alta'];
+if (!in_array($filterStatus, $allowedStatusFilters, true)) $filterStatus = '';
+if (!in_array($filterArea, $allowedAreaFilters, true)) $filterArea = '';
+if (!in_array($filterPriority, $allowedPriorityFilters, true)) $filterPriority = '';
+
+$reportCounts = [
+    'Total' => count($reports),
+    'Pendiente' => 0,
+    'En proceso' => 0,
+    'Solucionado' => 0,
+    'Cerrado' => 0,
+];
+foreach ($reports as $report) {
+    $statusKey = (string) ($report['status'] ?? '');
+    if (array_key_exists($statusKey, $reportCounts)) $reportCounts[$statusKey]++;
+}
+
+$filteredReports = array_values(array_filter($reports, static function (array $report) use ($filterSearch, $filterStatus, $filterArea, $filterPriority): bool {
+    if ($filterStatus !== '' && strcasecmp((string) ($report['status'] ?? ''), $filterStatus) !== 0) return false;
+    if ($filterArea !== '' && strcasecmp((string) ($report['area'] ?? ''), $filterArea) !== 0) return false;
+    if ($filterPriority !== '' && strcasecmp((string) ($report['priority'] ?? ''), $filterPriority) !== 0) return false;
+
+    if ($filterSearch !== '') {
+        $haystack = implode(' ', [
+            (string) ($report['folio'] ?? ''),
+            (string) ($report['type'] ?? ''),
+            (string) ($report['area'] ?? ''),
+            (string) ($report['status'] ?? ''),
+            (string) ($report['priority'] ?? ''),
+            (string) ($report['description'] ?? ''),
+            (string) ($report['requester'] ?? ''),
+            (string) ($report['client'] ?? ''),
+            (string) ($report['contract'] ?? ''),
+            (string) ($report['location'] ?? ''),
+        ]);
+        if (stripos($haystack, $filterSearch) === false) return false;
+    }
+
+    return true;
+}));
+
+$hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== '' || $filterPriority !== '';
 ?>
 <!doctype html>
 <html lang="es-MX">
@@ -219,7 +274,7 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-manage-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-bandeja-1">
 </head>
 <body>
   <header class="reportes-header">
@@ -274,15 +329,33 @@ $visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
     <?php if ($reportError !== ''): ?>
       <section class="reportes-note reportes-note-error" role="alert"><div><span class="reportes-kicker">Estado</span><h2>Acceso a Reportes no disponible</h2><p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p></div><span class="reportes-status">Revisar</span></section>
     <?php else: ?>
-      <section class="reportes-heading"><div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div><span class="reportes-status reportes-status-ok"><?= count($reports) ?> encontrados</span></section>
+      <section class="report-toolbar">
+        <div class="report-kpis" aria-label="Resumen por estatus">
+          <?php foreach ($reportCounts as $label => $count): ?>
+            <div class="report-kpi"><span><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span><strong><?= (int) $count ?></strong></div>
+          <?php endforeach; ?>
+        </div>
+
+        <form class="report-filters" method="get">
+          <label class="filter-search"><span>Buscar</span><input type="search" name="q" value="<?= htmlspecialchars($filterSearch, ENT_QUOTES, 'UTF-8') ?>" placeholder="Folio, cliente, contrato, ubicación o descripción"></label>
+          <label><span>Estatus</span><select name="estatus"><option value="">Todos</option><?php foreach (['Pendiente','En proceso','Solucionado','Cerrado'] as $option): ?><option value="<?= $option ?>" <?= $filterStatus === $option ? 'selected' : '' ?>><?= $option ?></option><?php endforeach; ?></select></label>
+          <label><span>Área</span><select name="area"><option value="">Todas</option><option value="Parque" <?= $filterArea === 'Parque' ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= $filterArea === 'Capillas' ? 'selected' : '' ?>>Capillas</option></select></label>
+          <label><span>Prioridad</span><select name="prioridad"><option value="">Todas</option><?php foreach (['Alta','Normal','Baja'] as $option): ?><option value="<?= $option ?>" <?= $filterPriority === $option ? 'selected' : '' ?>><?= $option ?></option><?php endforeach; ?></select></label>
+          <div class="filter-actions"><button type="submit">Filtrar</button><?php if ($hasFilters): ?><a href="/reportes-preview/">Limpiar</a><?php endif; ?></div>
+        </form>
+      </section>
+
+      <section class="reportes-heading"><div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div><span class="reportes-status reportes-status-ok"><?= count($filteredReports) ?> de <?= count($reports) ?></span></section>
       <?php if (count($reports) === 0): ?>
         <section class="reportes-note"><div><span class="reportes-kicker">Sin registros</span><h2>No hay reportes disponibles para tus accesos</h2><p>La conexión con SharePoint funciona. Cuando se registre el primer reporte aparecerá aquí.</p></div><span class="reportes-status">0 reportes</span></section>
+      <?php elseif (count($filteredReports) === 0): ?>
+        <section class="reportes-note"><div><span class="reportes-kicker">Sin coincidencias</span><h2>No encontramos reportes con esos filtros</h2><p>Modifica la búsqueda o limpia los filtros para volver a ver la bandeja completa.</p></div><span class="reportes-status">0 resultados</span></section>
       <?php else: ?>
         <section class="report-list" aria-label="Reportes disponibles">
-          <?php foreach ($reports as $report): ?>
+          <?php foreach ($filteredReports as $report): ?>
             <article class="report-item">
               <div class="report-item-top"><div><span class="report-area"><?= htmlspecialchars((string) $report['area'], ENT_QUOTES, 'UTF-8') ?></span><h3><?= htmlspecialchars((string) $report['folio'], ENT_QUOTES, 'UTF-8') ?></h3></div><span class="report-type"><?= htmlspecialchars((string) $report['status'], ENT_QUOTES, 'UTF-8') ?></span></div>
-              <div class="report-summary"><span><?= htmlspecialchars((string) $report['type'], ENT_QUOTES, 'UTF-8') ?></span><span>Prioridad: <?= htmlspecialchars((string) $report['priority'], ENT_QUOTES, 'UTF-8') ?></span><?php if ((string) $report['requester'] !== ''): ?><span>Solicitante: <?= htmlspecialchars((string) $report['requester'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></div>
+              <div class="report-summary"><span><?= htmlspecialchars((string) $report['type'], ENT_QUOTES, 'UTF-8') ?></span><span>Prioridad: <?= htmlspecialchars((string) $report['priority'], ENT_QUOTES, 'UTF-8') ?></span><?php if ((string) $report['requester'] !== ''): ?><span>Solicitante: <?= htmlspecialchars((string) $report['requester'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?><?php if ((string) $report['client'] !== ''): ?><span>Cliente: <?= htmlspecialchars((string) $report['client'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?><?php if ((string) $report['contract'] !== ''): ?><span>Contrato: <?= htmlspecialchars((string) $report['contract'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></div>
               <?php if ((string) $report['description'] !== ''): ?><p class="report-description"><?= nl2br(htmlspecialchars((string) $report['description'], ENT_QUOTES, 'UTF-8')) ?></p><?php endif; ?>
               <div class="report-actions">
                 <a href="/reportes-preview/gestionar.php?id=<?= (int) $report['id'] ?>">Ver / gestionar</a>
