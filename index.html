@@ -17,9 +17,13 @@
       </div>
     </div>
 
-    <div class="status-pill" id="appStatus" role="status">
-      <span class="status-dot"></span>
-      <span>Base lista</span>
+    <div class="auth-panel">
+      <div class="status-pill" id="appStatus" role="status">
+        <span class="status-dot"></span>
+        <span>Sin sesión</span>
+      </div>
+      <button class="auth-button" id="loginButton" type="button">Iniciar sesión</button>
+      <button class="auth-button auth-button-secondary" id="logoutButton" type="button" hidden>Cerrar sesión</button>
     </div>
   </header>
 
@@ -35,6 +39,10 @@
       </div>
 
       <div class="hero-meta">
+        <div class="meta-item">
+          <span class="meta-label">Usuario</span>
+          <strong id="userName">Sin iniciar sesión</strong>
+        </div>
         <div class="meta-item">
           <span class="meta-label">Sitio SharePoint</span>
           <strong id="siteName">—</strong>
@@ -55,62 +63,24 @@
     </section>
 
     <section class="report-grid" aria-label="Áreas de reportes">
-      <article class="report-card">
-        <div class="card-icon">V</div>
-        <div>
-          <h4>Vendedores</h4>
-          <p>Reportes asignados al equipo comercial.</p>
-        </div>
-        <span class="card-state">Próximamente</span>
-      </article>
-
-      <article class="report-card">
-        <div class="card-icon">P</div>
-        <div>
-          <h4>Parque</h4>
-          <p>Reportes operativos correspondientes al Parque.</p>
-        </div>
-        <span class="card-state">Próximamente</span>
-      </article>
-
-      <article class="report-card">
-        <div class="card-icon">C</div>
-        <div>
-          <h4>Capillas</h4>
-          <p>Reportes de operación y seguimiento de Capillas.</p>
-        </div>
-        <span class="card-state">Próximamente</span>
-      </article>
-
-      <article class="report-card">
-        <div class="card-icon">A</div>
-        <div>
-          <h4>Administración</h4>
-          <p>Vista general y administración de reportes.</p>
-        </div>
-        <span class="card-state">Próximamente</span>
-      </article>
+      <article class="report-card"><div class="card-icon">V</div><div><h4>Vendedores</h4><p>Reportes asignados al equipo comercial.</p></div><span class="card-state">Pendiente</span></article>
+      <article class="report-card"><div class="card-icon">P</div><div><h4>Parque</h4><p>Reportes operativos correspondientes al Parque.</p></div><span class="card-state">Pendiente</span></article>
+      <article class="report-card"><div class="card-icon">C</div><div><h4>Capillas</h4><p>Reportes de operación y seguimiento de Capillas.</p></div><span class="card-state">Pendiente</span></article>
+      <article class="report-card"><div class="card-icon">A</div><div><h4>Administración</h4><p>Vista general y administración de reportes.</p></div><span class="card-state">Pendiente</span></article>
     </section>
 
     <section class="connection-card">
       <div>
         <span class="eyebrow">Estado de integración</span>
-        <h3>SharePoint aún no está conectado</h3>
-        <p>
-          La estructura visual ya está preparada. El siguiente paso será autenticar al usuario y
-          leer la lista de Reportes sin exponer credenciales en el navegador.
-        </p>
+        <h3 id="connectionTitle">Autenticación Microsoft preparada</h3>
+        <p id="connectionText">Inicia sesión con una cuenta de la organización para validar el acceso.</p>
       </div>
-      <div class="connection-badge">Pendiente</div>
+      <div class="connection-badge" id="connectionBadge">Pendiente</div>
     </section>
   </main>
 
-  <footer class="footer">
-    <span>Jardines de Juan Pablo</span>
-    <span id="currentYear"></span>
-  </footer>
+  <footer class="footer"><span>Jardines de Juan Pablo</span><span id="currentYear"></span></footer>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="/Reportes-JJP/app.js"></script>
 </body>
 </html>
