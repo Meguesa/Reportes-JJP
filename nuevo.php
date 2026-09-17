@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-common.php';
 require_once __DIR__ . '/includes/reportes-write.php';
+require_once __DIR__ . '/includes/reportes-notificaciones.php';
 portal_require_authentication();
 
 $user = portal_user();
@@ -61,8 +62,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
         $itemId = (int) ($created['Id'] ?? 0);
         $folio = reportes_generate_folio($itemId);
         reportes_update_item($itemId, ['Folio' => $folio]);
-        if (isset($_FILES['adjuntos']) && is_array($_FILES['adjuntos'])) reportes_upload_posted_attachments($itemId, $_FILES['adjuntos']);
-        if (isset($_FILES['foto_camara']) && is_array($_FILES['foto_camara'])) reportes_upload_posted_attachments($itemId, $_FILES['foto_camara']);
+
+        $attachmentWarnings = [];
+        if (isset($_FILES['adjuntos']) && is_array($_FILES['adjuntos'])) {
+            $attachmentWarnings = array_merge($attachmentWarnings, reportes_upload_posted_attachments($itemId, $_FILES['adjuntos']));
+        }
+        if (isset($_FILES['foto_camara']) && is_array($_FILES['foto_camara'])) {
+            $attachmentWarnings = array_merge($attachmentWarnings, reportes_upload_posted_attachments($itemId, $_FILES['foto_camara']));
+        }
+
+        $notificationOk = true;
+        $notificationWarning = '';
+        try {
+            reportes_notification_new_report(
+                $itemId,
+                $folio,
+                $tipo,
+                $prioridad,
+                $nameRaw,
+                $emailRaw,
+                $descripcion,
+                $cliente,
+                $contrato,
+                $ubicacion
+            );
+        } catch (Throwable $notificationError) {
+            $notificationOk = false;
+            $notificationWarning = $notificationError->getMessage();
+            error_log('Reportes notificación ' . $folio . ': ' . $notificationWarning);
+        }
+
+        $_SESSION['reportes_flash'] = [
+            'folio' => $folio,
+            'notification_ok' => $notificationOk,
+            'notification_warning' => $notificationWarning,
+            'attachment_warnings' => $attachmentWarnings,
+        ];
 
         header('Location: /reportes-preview/?creado=' . rawurlencode($folio));
         exit;
@@ -73,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
 ?>
 <!doctype html>
 <html lang="es-MX">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nuevo reporte</title><link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-pages-1"><link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260917-pages-1"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nuevo reporte</title><link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-mail-1"><link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260917-mail-1"></head>
 <body>
 <header class="reportes-header"><div class="shell reportes-header-inner"><div class="reportes-brand"><div class="reportes-identity"><strong>Reportes</strong><span>Nuevo reporte</span></div></div><div class="reportes-header-context">Captura</div><div class="reportes-header-actions"><a class="header-action" href="/reportes-preview/">Volver a Reportes</a></div></div></header>
 <main class="shell reportes-main">
