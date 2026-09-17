@@ -12,7 +12,7 @@ $name = htmlspecialchars((string) ($user['name'] ?? 'Usuario'), ENT_QUOTES, 'UTF
 $emailRaw = strtolower(trim((string) ($user['email'] ?? '')));
 $email = htmlspecialchars($emailRaw, ENT_QUOTES, 'UTF-8');
 
-$reportAreas = [];
+$reportRoles = [];
 $reportError = '';
 $reports = [];
 $groupDiagnostics = [];
@@ -38,20 +38,45 @@ function reportes_value(array $row, array $candidateKeys, string $default = ''):
     return $default;
 }
 
-function reportes_area_allowed(string $area, array $allowedAreas, bool $isAdministrator): bool
+function reportes_role_enabled(array $roles, string $role): bool
 {
-    if ($isAdministrator) return true;
-    foreach ($allowedAreas as $allowed) {
-        if (strcasecmp(trim($area), trim((string) $allowed)) === 0) return true;
+    foreach ($roles as $candidate) {
+        if (strcasecmp(trim((string) $candidate), trim($role)) === 0) return true;
     }
     return false;
 }
 
-try {
-    $reportAreas = reportes_user_areas($emailRaw);
-    $isAdministrator = in_array('Administradores', $reportAreas, true);
+/**
+ * Reglas de visibilidad:
+ * - Administradores: todos los reportes.
+ * - Parque / Capillas: reportes asignados a su AreaAsignada.
+ * - Vendedores: únicamente sus propios reportes, identificados por SolicitanteCorreo.
+ */
+function reportes_row_visible(array $row, array $roles, string $email): bool
+{
+    if (reportes_role_enabled($roles, 'Administradores')) return true;
 
-    if (count($reportAreas) === 0) {
+    $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], '');
+    if (reportes_role_enabled($roles, 'Parque') && strcasecmp($area, 'Parque') === 0) return true;
+    if (reportes_role_enabled($roles, 'Capillas') && strcasecmp($area, 'Capillas') === 0) return true;
+
+    if (reportes_role_enabled($roles, 'Vendedores')) {
+        $solicitanteCorreo = strtolower(reportes_value($row, [
+            'SolicitanteCorreo',
+            'Solicitante_x0020_Correo',
+            'CorreoSolicitante',
+            'Correo_x0020_Solicitante',
+        ], ''));
+        if ($solicitanteCorreo !== '' && $solicitanteCorreo === strtolower(trim($email))) return true;
+    }
+
+    return false;
+}
+
+try {
+    $reportRoles = reportes_user_areas($emailRaw);
+
+    if (count($reportRoles) === 0) {
         $reportError = 'Tu cuenta no pertenece a un grupo con acceso a Reportes.';
         try {
             $groupDiagnostics = reportes_group_diagnostics($emailRaw);
@@ -67,9 +92,9 @@ try {
         }
     } else {
         foreach (reportes_list_items(300) as $row) {
-            $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
-            if (!reportes_area_allowed($area, $reportAreas, $isAdministrator)) continue;
+            if (!reportes_row_visible($row, $reportRoles, $emailRaw)) continue;
 
+            $area = reportes_value($row, ['AreaAsignada', 'Area_x0020_Asignada', 'Area'], 'Sin área');
             $itemId = (int) ($row['Id'] ?? $row['ID'] ?? 0);
             $title = reportes_value($row, ['Title', 'Titulo', 'Título', 'Nombre'], 'Reporte sin título');
             $type = reportes_value($row, ['TipoReporte', 'Tipo_x0020_Reporte', 'Tipo'], 'Reporte');
@@ -108,10 +133,9 @@ try {
     $reportError = 'No fue posible consultar Reportes: ' . $error->getMessage();
 }
 
-$isAdministrator = in_array('Administradores', $reportAreas, true);
-$visibleAreas = $isAdministrator
+$visibleRoles = reportes_role_enabled($reportRoles, 'Administradores')
     ? ['Vendedores', 'Parque', 'Capillas', 'Administradores']
-    : $reportAreas;
+    : $reportRoles;
 ?>
 <!doctype html>
 <html lang="es-MX">
@@ -120,7 +144,7 @@ $visibleAreas = $isAdministrator
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-debug-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-roles-1">
 </head>
 <body>
   <header class="reportes-header">
@@ -171,7 +195,7 @@ $visibleAreas = $isAdministrator
       <div class="reportes-meta">
         <div><span>Usuario</span><strong><?= $name ?></strong></div>
         <div><span>Cuenta</span><strong><?= $email ?></strong></div>
-        <div><span>Áreas autorizadas</span><strong><?= htmlspecialchars(count($visibleAreas) > 0 ? implode(', ', $visibleAreas) : 'Sin acceso', ENT_QUOTES, 'UTF-8') ?></strong></div>
+        <div><span>Accesos autorizados</span><strong><?= htmlspecialchars(count($visibleRoles) > 0 ? implode(', ', $visibleRoles) : 'Sin acceso', ENT_QUOTES, 'UTF-8') ?></strong></div>
       </div>
     </section>
 
@@ -233,7 +257,7 @@ $visibleAreas = $isAdministrator
         <section class="reportes-note">
           <div>
             <span class="reportes-kicker">Sin registros</span>
-            <h2>No hay reportes disponibles para tus áreas</h2>
+            <h2>No hay reportes disponibles para tus accesos</h2>
             <p>La conexión con SharePoint funciona, pero no se encontraron registros visibles con tu configuración actual.</p>
           </div>
           <span class="reportes-status">0 reportes</span>
@@ -274,7 +298,7 @@ $visibleAreas = $isAdministrator
       <div>
         <span class="reportes-kicker">Integración</span>
         <h2>Lista SharePoint conectada</h2>
-        <p>Fuente: Centro de Control Dirección / Reportes. Los permisos pertenecen a esta herramienta y se resuelven con sus grupos de SharePoint.</p>
+        <p>Fuente: Centro de Control Dirección / BI_Reportes. Los permisos pertenecen a esta herramienta y se resuelven con sus grupos de SharePoint.</p>
       </div>
       <span class="reportes-status reportes-status-ok">Conectado</span>
     </section>
