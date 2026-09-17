@@ -10,12 +10,17 @@ Este repositorio contiene toda la implementación propia de Reportes:
 - estilos específicos;
 - resolución de permisos por grupos de SharePoint;
 - lectura de la lista `Reportes`;
-- lectura de archivos adjuntos;
-- despliegue de la herramienta a cPanel.
+- lectura de archivos adjuntos.
 
 ## Integración con el Portal
 
-El Portal Interno únicamente proporciona la sesión Microsoft 365 compartida y la entrada visual hacia la herramienta. La lógica de Reportes no debe implementarse dentro de `Portal-Interno-JJP`.
+El Portal Interno únicamente proporciona:
+
+- la sesión Microsoft 365 compartida;
+- la tarjeta/enlace hacia la herramienta;
+- un workflow puente de publicación que utiliza las credenciales FTPS ya existentes del Portal.
+
+La lógica, interfaz, estilos y conexión SharePoint de Reportes no deben implementarse dentro de `Portal-Interno-JJP`.
 
 ## Ruta temporal
 
@@ -36,10 +41,10 @@ Lista: `Reportes`
 
 ## Despliegue
 
-Workflow: `.github/workflows/deploy-cpanel.yml`
+La publicación se ejecuta desde `Meguesa/Portal-Interno-JJP` mediante el workflow:
 
-El repositorio requiere estos secretos de GitHub Actions:
+`.github/workflows/publicar-reportes.yml`
 
-- `FTP_SERVER`
-- `FTP_USERNAME`
-- `FTP_PASSWORD`
+Ese workflow descarga directamente la rama `main` de `Meguesa/Reportes-JJP` y publica únicamente los archivos de esta herramienta en `/reportes-preview/`.
+
+`Reportes-JJP` no almacena credenciales FTP ni copias del código del Portal.
