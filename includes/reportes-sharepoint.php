@@ -210,14 +210,19 @@ function reportes_sharepoint_session(): array
     return $session;
 }
 
-/** @return array<string,string> */
-function reportes_group_area_map(): array
+/**
+ * Alias de grupos aceptados por área. Se soportan tanto los nombres simples
+ * como los nombres prefijados usados durante la configuración inicial.
+ *
+ * @return array<string,string[]>
+ */
+function reportes_group_aliases(): array
 {
     return [
-        'Reportes - Vendedores' => 'Vendedores',
-        'Reportes - Parque' => 'Parque',
-        'Reportes - Capillas' => 'Capillas',
-        'Reportes - Administradores' => 'Administradores',
+        'Vendedores' => ['Reportes - Vendedores', 'Vendedores'],
+        'Parque' => ['Reportes - Parque', 'Parque'],
+        'Capillas' => ['Reportes - Capillas', 'Capillas'],
+        'Administradores' => ['Reportes - Administradores', 'Administradores'],
     ];
 }
 
@@ -225,8 +230,11 @@ function reportes_group_area_map(): array
 function reportes_sharepoint_group_users(string $groupName): array
 {
     $session = reportes_sharepoint_session();
-    $escaped = rawurlencode(str_replace("'", "''", trim($groupName)));
-    $url = rtrim($session['siteUrl'], '/') . "/_api/web/sitegroups/getbyname('" . $escaped . "')/users?$select=Email,LoginName";
+    $odataName = str_replace("'", "''", trim($groupName));
+    $url = rtrim($session['siteUrl'], '/')
+        . "/_api/web/sitegroups/getbyname('"
+        . rawurlencode($odataName)
+        . "')/users?$select=Email,LoginName";
 
     $data = reportes_remote_json($url, 'GET', [
         'Authorization: Bearer ' . $session['token'],
@@ -245,6 +253,53 @@ function reportes_sharepoint_group_users(string $groupName): array
     return $result;
 }
 
+/**
+ * Devuelve un diagnóstico seguro: no expone tokens ni credenciales, solo
+ * cuáles alias de grupo existen y si el correo consultado aparece en ellos.
+ *
+ * @return array<int,array{area:string,group:string,status:string,members:int,matched:bool}>
+ */
+function reportes_group_diagnostics(string $email): array
+{
+    $email = strtolower(trim($email));
+    $diagnostics = [];
+
+    foreach (reportes_group_aliases() as $area => $aliases) {
+        foreach ($aliases as $groupName) {
+            try {
+                $users = reportes_sharepoint_group_users($groupName);
+                $matched = false;
+                foreach ($users as $user) {
+                    if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                $diagnostics[] = [
+                    'area' => $area,
+                    'group' => $groupName,
+                    'status' => 'encontrado',
+                    'members' => count($users),
+                    'matched' => $matched,
+                ];
+            } catch (Throwable $error) {
+                $message = $error->getMessage();
+                $status = (strpos($message, 'HTTP 404') !== false) ? 'no existe'
+                    : ((strpos($message, 'HTTP 403') !== false) ? 'sin permiso' : 'error');
+                $diagnostics[] = [
+                    'area' => $area,
+                    'group' => $groupName,
+                    'status' => $status,
+                    'members' => 0,
+                    'matched' => false,
+                ];
+            }
+        }
+    }
+
+    return $diagnostics;
+}
+
 /** @return string[] */
 function reportes_user_areas(string $email): array
 {
@@ -252,19 +307,21 @@ function reportes_user_areas(string $email): array
     if ($email === '') return [];
 
     $areas = [];
-    foreach (reportes_group_area_map() as $groupName => $area) {
-        try {
-            $users = reportes_sharepoint_group_users($groupName);
-        } catch (Throwable $error) {
-            $message = $error->getMessage();
-            if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) continue;
-            throw $error;
-        }
+    foreach (reportes_group_aliases() as $area => $aliases) {
+        foreach ($aliases as $groupName) {
+            try {
+                $users = reportes_sharepoint_group_users($groupName);
+            } catch (Throwable $error) {
+                $message = $error->getMessage();
+                if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) continue;
+                throw $error;
+            }
 
-        foreach ($users as $user) {
-            if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
-                $areas[strtolower($area)] = $area;
-                break;
+            foreach ($users as $user) {
+                if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
+                    $areas[strtolower($area)] = $area;
+                    break 2;
+                }
             }
         }
     }
