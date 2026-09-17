@@ -106,6 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         if (mb_strlen($descripcion) > 4000) throw new RuntimeException('La descripción es demasiado larga.');
         if (!in_array($prioridad, ['Baja', 'Normal', 'Alta'], true)) $prioridad = 'Normal';
 
+        if ($tipo === 'Capillas') {
+            $cliente = '';
+            $contrato = '';
+            $ubicacion = '';
+        }
+
         $area = $tipo;
         $title = 'Reporte ' . $tipo . ' - ' . $nameRaw . ' - ' . date('Y-m-d H:i');
 
@@ -141,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
             'message' => 'Reporte ' . $folio . ' creado correctamente.',
             'warnings' => $formWarnings,
         ];
-        header('Location: /reportes-preview/?creado=' . rawurlencode($folio));
+        header('Location: /reportes-preview/?creado=' . rawurlencode($folio) . '#reportes');
         exit;
     } catch (Throwable $error) {
         error_log('Reportes crear: ' . $error->getMessage());
@@ -274,7 +280,7 @@ $hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== ''
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Reportes | Vista previa</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-bandeja-1">
+  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-nav-2">
 </head>
 <body>
   <header class="reportes-header">
@@ -297,6 +303,15 @@ $hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== ''
   </header>
 
   <main class="shell reportes-main">
+    <nav class="section-nav" aria-label="Secciones de Reportes">
+      <span class="section-nav-label">Secciones</span>
+      <?php if ($canCreate): ?><a href="#nuevo-reporte">Nuevo reporte</a><?php endif; ?>
+      <?php if ($reportError === ''): ?>
+        <a href="#resumen">Resumen</a>
+        <a href="#reportes">Reportes</a>
+      <?php endif; ?>
+    </nav>
+
     <section class="reportes-hero">
       <span class="reportes-kicker">Vista previa</span><h1>Consulta y seguimiento de reportes</h1>
       <p>Los reportes se registran y consultan directamente en SharePoint de acuerdo con los permisos de cada usuario.</p>
@@ -308,19 +323,22 @@ $hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== ''
     <?php endif; ?>
 
     <?php if ($canCreate): ?>
-      <section class="create-card">
+      <section class="create-card" id="nuevo-reporte">
         <div class="create-heading"><div><span class="reportes-kicker">Captura</span><h2>Nuevo reporte</h2><p>Registra una incidencia para Parque o Capillas. Tu nombre y correo se tomarán automáticamente de la sesión.</p></div></div>
         <?php if ($formError !== ''): ?><div class="form-error"><?= htmlspecialchars($formError, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
         <form class="report-form" method="post" enctype="multipart/form-data">
           <input type="hidden" name="action" value="crear_reporte"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
-          <label><span>Tipo de reporte *</span><select name="tipo_reporte" required><option value="">Selecciona...</option><option value="Parque" <?= (($_POST['tipo_reporte'] ?? '') === 'Parque') ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= (($_POST['tipo_reporte'] ?? '') === 'Capillas') ? 'selected' : '' ?>>Capillas</option></select></label>
+          <label><span>Tipo de reporte *</span><select name="tipo_reporte" id="tipo-reporte" required><option value="">Selecciona...</option><option value="Parque" <?= (($_POST['tipo_reporte'] ?? '') === 'Parque') ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= (($_POST['tipo_reporte'] ?? '') === 'Capillas') ? 'selected' : '' ?>>Capillas</option></select></label>
           <label><span>Prioridad</span><select name="prioridad"><option value="Normal">Normal</option><option value="Alta">Alta</option><option value="Baja">Baja</option></select></label>
-          <label><span>Cliente</span><input type="text" name="cliente_nombre" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['cliente_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Nombre del cliente"></label>
-          <label><span>Contrato</span><input type="text" name="contrato" maxlength="80" value="<?= htmlspecialchars((string) ($_POST['contrato'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Número de contrato"></label>
-          <label class="form-wide"><span>Ubicación</span><input type="text" name="ubicacion" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['ubicacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Sección, lote, sala o referencia"></label>
+          <label class="parque-only"><span>Cliente</span><input type="text" name="cliente_nombre" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['cliente_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Nombre del cliente"></label>
+          <label class="parque-only"><span>Contrato</span><input type="text" name="contrato" maxlength="80" value="<?= htmlspecialchars((string) ($_POST['contrato'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Número de contrato"></label>
+          <label class="form-wide parque-only"><span>Ubicación</span><input type="text" name="ubicacion" maxlength="180" value="<?= htmlspecialchars((string) ($_POST['ubicacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Sección, lote, sala o referencia"></label>
+          <div class="report-type-note form-wide" id="capillas-note" hidden>Para reportes de Capillas solo se solicita la descripción del reporte y, si aplica, evidencia fotográfica o archivos adjuntos.</div>
           <label class="form-wide"><span>Descripción del reporte *</span><textarea name="descripcion" rows="5" maxlength="4000" required placeholder="Describe claramente qué sucedió y qué necesitas que se revise."><?= htmlspecialchars((string) ($_POST['descripcion'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea></label>
-          <label class="form-wide"><span>Adjuntos / seleccionar archivos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Opcional. Puedes seleccionar varias fotos o documentos. Hasta 15 MB por archivo.</small></label>
-          <label class="form-wide"><span>Tomar foto con cámara</span><input type="file" name="foto_camara" accept="image/*" capture="environment"><small>En celular abre la cámara trasera para tomar una foto y adjuntarla directamente al reporte.</small></label>
+          <div class="attachment-grid form-wide">
+            <label class="attachment-option"><span>Seleccionar archivos</span><input type="file" name="adjuntos[]" multiple accept=".jpg,.jpeg,.png,.webp,.heic,.pdf,.doc,.docx,.xls,.xlsx"><small>Fotos o documentos existentes. Hasta 15 MB por archivo.</small></label>
+            <label class="attachment-option"><span>Tomar foto</span><input type="file" name="foto_camara" accept="image/*" capture="environment"><small>En celular abre la cámara trasera y adjunta la foto al reporte.</small></label>
+          </div>
           <div class="form-actions form-wide"><button type="submit">Enviar reporte</button></div>
         </form>
       </section>
@@ -329,23 +347,23 @@ $hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== ''
     <?php if ($reportError !== ''): ?>
       <section class="reportes-note reportes-note-error" role="alert"><div><span class="reportes-kicker">Estado</span><h2>Acceso a Reportes no disponible</h2><p><?= htmlspecialchars($reportError, ENT_QUOTES, 'UTF-8') ?></p></div><span class="reportes-status">Revisar</span></section>
     <?php else: ?>
-      <section class="report-toolbar">
+      <section class="report-toolbar" id="resumen">
         <div class="report-kpis" aria-label="Resumen por estatus">
           <?php foreach ($reportCounts as $label => $count): ?>
             <div class="report-kpi"><span><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span><strong><?= (int) $count ?></strong></div>
           <?php endforeach; ?>
         </div>
 
-        <form class="report-filters" method="get">
+        <form class="report-filters" method="get" action="/reportes-preview/#reportes">
           <label class="filter-search"><span>Buscar</span><input type="search" name="q" value="<?= htmlspecialchars($filterSearch, ENT_QUOTES, 'UTF-8') ?>" placeholder="Folio, cliente, contrato, ubicación o descripción"></label>
           <label><span>Estatus</span><select name="estatus"><option value="">Todos</option><?php foreach (['Pendiente','En proceso','Solucionado','Cerrado'] as $option): ?><option value="<?= $option ?>" <?= $filterStatus === $option ? 'selected' : '' ?>><?= $option ?></option><?php endforeach; ?></select></label>
           <label><span>Área</span><select name="area"><option value="">Todas</option><option value="Parque" <?= $filterArea === 'Parque' ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= $filterArea === 'Capillas' ? 'selected' : '' ?>>Capillas</option></select></label>
           <label><span>Prioridad</span><select name="prioridad"><option value="">Todas</option><?php foreach (['Alta','Normal','Baja'] as $option): ?><option value="<?= $option ?>" <?= $filterPriority === $option ? 'selected' : '' ?>><?= $option ?></option><?php endforeach; ?></select></label>
-          <div class="filter-actions"><button type="submit">Filtrar</button><?php if ($hasFilters): ?><a href="/reportes-preview/">Limpiar</a><?php endif; ?></div>
+          <div class="filter-actions"><button type="submit">Filtrar</button><?php if ($hasFilters): ?><a href="/reportes-preview/#reportes">Limpiar</a><?php endif; ?></div>
         </form>
       </section>
 
-      <section class="reportes-heading"><div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div><span class="reportes-status reportes-status-ok"><?= count($filteredReports) ?> de <?= count($reports) ?></span></section>
+      <section class="reportes-heading" id="reportes"><div><span class="reportes-kicker">SharePoint</span><h2>Reportes disponibles</h2></div><span class="reportes-status reportes-status-ok"><?= count($filteredReports) ?> de <?= count($reports) ?></span></section>
       <?php if (count($reports) === 0): ?>
         <section class="reportes-note"><div><span class="reportes-kicker">Sin registros</span><h2>No hay reportes disponibles para tus accesos</h2><p>La conexión con SharePoint funciona. Cuando se registre el primer reporte aparecerá aquí.</p></div><span class="reportes-status">0 reportes</span></section>
       <?php elseif (count($filteredReports) === 0): ?>
@@ -369,5 +387,29 @@ $hasFilters = $filterSearch !== '' || $filterStatus !== '' || $filterArea !== ''
 
     <section class="reportes-note"><div><span class="reportes-kicker">Integración</span><h2>Lista SharePoint conectada</h2><p>Fuente: Centro de Control Dirección / BI_Reportes. Reportes mantiene su propia lógica de permisos y datos.</p></div><span class="reportes-status reportes-status-ok">Conectado</span></section>
   </main>
+
+  <script>
+    (function () {
+      const typeSelect = document.getElementById('tipo-reporte');
+      if (!typeSelect) return;
+      const parqueFields = Array.from(document.querySelectorAll('.parque-only'));
+      const capillasNote = document.getElementById('capillas-note');
+
+      function updateReportTypeFields() {
+        const isCapillas = typeSelect.value === 'Capillas';
+        parqueFields.forEach(function (element) {
+          element.hidden = isCapillas;
+          element.querySelectorAll('input, select, textarea').forEach(function (control) {
+            control.disabled = isCapillas;
+            if (isCapillas && control instanceof HTMLInputElement) control.value = '';
+          });
+        });
+        if (capillasNote) capillasNote.hidden = !isCapillas;
+      }
+
+      typeSelect.addEventListener('change', updateReportTypeFields);
+      updateReportTypeFields();
+    })();
+  </script>
 </body>
 </html>
