@@ -186,6 +186,19 @@ function reportes_find_item_id_by_title(string $title): int
     return is_array($first) ? (int) ($first['Id'] ?? $first['ID'] ?? 0) : 0;
 }
 
+/** @return array<string,mixed> */
+function reportes_get_item(int $itemId): array
+{
+    if ($itemId <= 0) throw new InvalidArgumentException('ID de reporte inválido.');
+
+    $session = reportes_sharepoint_session();
+    return reportes_remote_json(reportes_list_api_base() . '/items(' . $itemId . ')', 'GET', [
+        'Authorization: Bearer ' . $session['token'],
+        'Accept: application/json;odata=nometadata',
+        'Content-Type: application/json;odata=nometadata',
+    ]);
+}
+
 /** @param array<string,mixed> $canonicalValues */
 function reportes_update_item(int $itemId, array $canonicalValues): void
 {
