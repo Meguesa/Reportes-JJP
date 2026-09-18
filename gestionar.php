@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-sharepoint.php';
 require_once __DIR__ . '/includes/reportes-write.php';
+require_once __DIR__ . '/includes/reportes-header.php';
 portal_require_authentication();
 
 $user = portal_user();
@@ -157,16 +158,7 @@ $isCapillas = strcasecmp($area, 'Capillas') === 0;
   <link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260917-nav-2">
 </head>
 <body>
-  <header class="reportes-header">
-    <div class="shell reportes-header-inner">
-      <div class="reportes-brand">
-        <div class="reportes-logo" aria-hidden="true"><svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M32 6v12M32 46v12M6 32h12M46 32h12M13.6 13.6l8.5 8.5M41.9 41.9l8.5 8.5M50.4 13.6l-8.5 8.5M22.1 41.9l-8.5 8.5"/></g><circle cx="32" cy="32" r="9" fill="currentColor"/></svg></div>
-        <div class="reportes-identity"><strong>Reportes</strong><span>Seguimiento</span></div>
-      </div>
-      <div class="reportes-header-context"><?= htmlspecialchars($folio, ENT_QUOTES, 'UTF-8') ?></div>
-      <div class="reportes-header-actions"><a class="header-action" href="/reportes-preview/resumen.php">Volver a Resumen</a></div>
-    </div>
-  </header>
+  <?php reportes_render_header($user); ?>
 
   <main class="shell reportes-main">
     <section class="report-menu" aria-label="Módulos de Reportes">
