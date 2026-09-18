@@ -71,7 +71,15 @@ function resumen_render_rows(array $items, string $emptyMessage): void
         $area = htmlspecialchars((string) $r['area'], ENT_QUOTES, 'UTF-8');
         $priority = htmlspecialchars((string) $r['priority'], ENT_QUOTES, 'UTF-8');
         $requester = htmlspecialchars((string) ($r['requester'] !== '' ? $r['requester'] : '—'), ENT_QUOTES, 'UTF-8');
-        $status = htmlspecialchars((string) $r['status'], ENT_QUOTES, 'UTF-8');
+        $statusRaw = trim((string) $r['status']);
+        $status = htmlspecialchars($statusRaw, ENT_QUOTES, 'UTF-8');
+        $statusClass = match (mb_strtolower($statusRaw, 'UTF-8')) {
+            'pendiente' => 'status-pendiente',
+            'en proceso' => 'status-proceso',
+            'solucionado' => 'status-solucionado',
+            'cerrado' => 'status-cerrado',
+            default => 'status-cerrado',
+        };
         $description = trim((string) $r['description']);
         $descriptionShort = mb_strlen($description) > 115 ? mb_substr($description, 0, 112) . '…' : $description;
         $descriptionHtml = htmlspecialchars($descriptionShort !== '' ? $descriptionShort : 'Sin descripción', ENT_QUOTES, 'UTF-8');
@@ -92,7 +100,7 @@ function resumen_render_rows(array $items, string $emptyMessage): void
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Área</span>' . $area . '</div>';
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Prioridad</span>' . $priority . '</div>';
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Solicitante</span>' . $requester . '</div>';
-        echo '<div class="report-cell" role="cell"><span class="mobile-label">Estatus</span><span class="report-row-status">' . $status . '</span></div>';
+        echo '<div class="report-cell" role="cell"><span class="mobile-label">Estatus</span><span class="report-row-status ' . $statusClass . '">' . $status . '</span></div>';
         echo '<div class="report-cell report-row-action" role="cell"><a href="/reportes-preview/gestionar.php?id=' . (int) $r['id'] . '">Ver / gestionar</a></div>';
         echo '</article>';
     }
