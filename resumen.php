@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-common.php';
+require_once __DIR__ . '/includes/reportes-header.php';
 portal_require_authentication();
 
 $user = portal_user();
@@ -110,15 +111,7 @@ function resumen_render_rows(array $items, string $emptyMessage): void
   <link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260918-summary-1">
 </head>
 <body>
-<header class="reportes-header">
-  <div class="shell reportes-header-inner">
-    <div class="reportes-brand">
-      <div class="reportes-identity"><strong>Reportes</strong><span>Resumen</span></div>
-    </div>
-    <div class="reportes-header-context">Consulta y seguimiento</div>
-    <div class="reportes-header-actions"><a class="header-action" href="/">Volver al Portal</a></div>
-  </div>
-</header>
+<?php reportes_render_header($user); ?>
 
 <main class="shell reportes-main">
   <section class="report-menu" aria-label="Módulos de Reportes">
