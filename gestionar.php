@@ -154,16 +154,16 @@ $isCapillas = strcasecmp($area, 'Capillas') === 0;
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title><?= htmlspecialchars($folio, ENT_QUOTES, 'UTF-8') ?> | Reportes</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-nav-2">
-  <link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260917-nav-2">
+  <link rel="stylesheet" href="/reportes/styles.css?v=20260917-nav-2">
+  <link rel="stylesheet" href="/reportes/styles-sections.css?v=20260917-nav-2">
 </head>
 <body>
   <?php reportes_render_header($user); ?>
 
   <main class="shell reportes-main">
     <section class="report-menu" aria-label="Módulos de Reportes">
-      <a class="report-menu-card" href="/reportes-preview/resumen.php"><strong>Resumen</strong><small>Indicadores, filtros y seguimiento.</small></a>
-      <a class="report-menu-card" href="/reportes-preview/nuevo.php"><strong>Nuevo reporte</strong><small>Registrar una incidencia.</small></a>
+      <a class="report-menu-card" href="/reportes/resumen.php"><strong>Resumen</strong><small>Indicadores, filtros y seguimiento.</small></a>
+      <a class="report-menu-card" href="/reportes/nuevo.php"><strong>Nuevo reporte</strong><small>Registrar una incidencia.</small></a>
     </section>
 
     <?php if ($error !== ''): ?>
