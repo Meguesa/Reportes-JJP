@@ -196,7 +196,7 @@ function reportes_notification_new_report(
         throw new RuntimeException('El grupo Reportes - ' . $area . ' no tiene miembros con correo para notificar.');
     }
 
-    $link = 'https://portal.juanpablo.com.mx/reportes-preview/gestionar.php?id=' . $itemId;
+    $link = 'https://portal.juanpablo.com.mx/reportes/gestionar.php?id=' . $itemId;
     $rows = '';
 
     $details = [
