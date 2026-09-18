@@ -6,6 +6,7 @@ require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reportes-common.php';
 require_once __DIR__ . '/includes/reportes-write.php';
 require_once __DIR__ . '/includes/reportes-notificaciones.php';
+require_once __DIR__ . '/includes/reportes-header.php';
 portal_require_authentication();
 
 $user = portal_user();
@@ -110,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
 <html lang="es-MX">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nuevo reporte</title><link rel="stylesheet" href="/reportes-preview/styles.css?v=20260917-mail-1"><link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260917-mail-1"></head>
 <body>
-<header class="reportes-header"><div class="shell reportes-header-inner"><div class="reportes-brand"><div class="reportes-identity"><strong>Reportes</strong><span>Nuevo reporte</span></div></div><div class="reportes-header-context">Captura</div><div class="reportes-header-actions"><a class="header-action" href="/reportes-preview/resumen.php">Volver a Resumen</a></div></div></header>
+<?php reportes_render_header($user); ?>
 <main class="shell reportes-main">
   <section class="report-menu"><a class="report-menu-card" href="/reportes-preview/resumen.php"><strong>Resumen</strong><small>Indicadores, filtros y seguimiento.</small></a><a class="report-menu-card is-active" href="/reportes-preview/nuevo.php"><strong>Nuevo reporte</strong><small>Registrar una incidencia.</small></a></section>
   <section class="create-card"><div class="create-heading"><span class="reportes-kicker">Captura</span><h2>Nuevo reporte</h2></div>
