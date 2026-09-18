@@ -45,3 +45,16 @@ html{scroll-behavior:smooth}.report-menu{display:grid;grid-template-columns:repe
   .report-row-action{width:100%}
   .report-row-action a{width:100%}
 }
+
+
+/* Alineación de tabla y colores de estatus */
+.report-table-head,.report-table-row{
+  grid-template-columns:minmax(320px,2.5fr) minmax(80px,.65fr) minmax(95px,.75fr) minmax(150px,1fr) minmax(110px,.8fr) 116px;
+}
+.report-table-head>span{padding:0 10px}
+.report-table-head>span:last-child{text-align:right}
+.report-row-action{width:116px;justify-self:end;text-align:right}
+.report-row-status.status-pendiente{background:#fff1c7;color:#8a5b00;border:1px solid #f1cf72}
+.report-row-status.status-proceso{background:#eaf3ff;color:#1f5f9d;border:1px solid #b9d5f3}
+.report-row-status.status-solucionado{background:#e7f4ed;color:#226a45;border:1px solid #bfe0cd}
+.report-row-status.status-cerrado{background:#eeeeee;color:#5f5f5f;border:1px solid #d7d7d7}
