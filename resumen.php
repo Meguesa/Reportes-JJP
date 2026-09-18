@@ -91,7 +91,7 @@ function resumen_render_rows(array $items, string $emptyMessage): void
 
         echo '<article class="report-table-row" role="row">';
         echo '<div class="report-cell report-main-cell" role="cell">';
-        echo '<a class="report-folio-link" href="/reportes-preview/gestionar.php?id=' . (int) $r['id'] . '">' . $folio . '</a>';
+        echo '<a class="report-folio-link" href="/reportes/gestionar.php?id=' . (int) $r['id'] . '">' . $folio . '</a>';
         echo '<span class="report-row-description">' . $descriptionHtml . '</span>';
         if ($extra) {
             echo '<span class="report-row-extra">' . htmlspecialchars(implode(' · ', $extra), ENT_QUOTES, 'UTF-8') . '</span>';
@@ -101,7 +101,7 @@ function resumen_render_rows(array $items, string $emptyMessage): void
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Prioridad</span>' . $priority . '</div>';
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Solicitante</span>' . $requester . '</div>';
         echo '<div class="report-cell" role="cell"><span class="mobile-label">Estatus</span><span class="report-row-status ' . $statusClass . '">' . $status . '</span></div>';
-        echo '<div class="report-cell report-row-action" role="cell"><a href="/reportes-preview/gestionar.php?id=' . (int) $r['id'] . '">Ver / gestionar</a></div>';
+        echo '<div class="report-cell report-row-action" role="cell"><a href="/reportes/gestionar.php?id=' . (int) $r['id'] . '">Ver / gestionar</a></div>';
         echo '</article>';
     }
 
@@ -115,21 +115,21 @@ function resumen_render_rows(array $items, string $emptyMessage): void
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Resumen | Reportes</title>
-  <link rel="stylesheet" href="/reportes-preview/styles.css?v=20260918-summary-1">
-  <link rel="stylesheet" href="/reportes-preview/styles-sections.css?v=20260918-summary-1">
+  <link rel="stylesheet" href="/reportes/styles.css?v=20260918-summary-1">
+  <link rel="stylesheet" href="/reportes/styles-sections.css?v=20260918-summary-1">
 </head>
 <body>
 <?php reportes_render_header($user); ?>
 
 <main class="shell reportes-main">
   <section class="report-menu" aria-label="Módulos de Reportes">
-    <a class="report-menu-card is-active" href="/reportes-preview/resumen.php">
+    <a class="report-menu-card is-active" href="/reportes/resumen.php">
       <span class="report-menu-icon">▦</span>
       <strong>Resumen</strong>
       <small>Indicadores, filtros y seguimiento.</small>
     </a>
     <?php if ($canCreate): ?>
-      <a class="report-menu-card" href="/reportes-preview/nuevo.php">
+      <a class="report-menu-card" href="/reportes/nuevo.php">
         <span class="report-menu-icon">＋</span>
         <strong>Nuevo reporte</strong>
         <small>Registrar una nueva incidencia.</small>
@@ -169,7 +169,7 @@ function resumen_render_rows(array $items, string $emptyMessage): void
         <label><span>Estatus</span><select name="estatus"><option value="">Todos</option><?php foreach (['Pendiente','En proceso','Solucionado','Cerrado'] as $o): ?><option value="<?= $o ?>" <?= $status === $o ? 'selected' : '' ?>><?= $o ?></option><?php endforeach; ?></select></label>
         <label><span>Área</span><select name="area"><option value="">Todas</option><option value="Parque" <?= $area === 'Parque' ? 'selected' : '' ?>>Parque</option><option value="Capillas" <?= $area === 'Capillas' ? 'selected' : '' ?>>Capillas</option></select></label>
         <label><span>Prioridad</span><select name="prioridad"><option value="">Todas</option><?php foreach (['Alta','Normal','Baja'] as $o): ?><option value="<?= $o ?>" <?= $priority === $o ? 'selected' : '' ?>><?= $o ?></option><?php endforeach; ?></select></label>
-        <div class="filter-actions"><button type="submit">Filtrar</button><a href="/reportes-preview/resumen.php">Limpiar</a></div>
+        <div class="filter-actions"><button type="submit">Filtrar</button><a href="/reportes/resumen.php">Limpiar</a></div>
       </form>
     </section>
 
