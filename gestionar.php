@@ -164,17 +164,15 @@ $isCapillas = strcasecmp($area, 'Capillas') === 0;
         <div class="reportes-identity"><strong>Reportes</strong><span>Seguimiento</span></div>
       </div>
       <div class="reportes-header-context"><?= htmlspecialchars($folio, ENT_QUOTES, 'UTF-8') ?></div>
-      <div class="reportes-header-actions"><a class="header-action" href="/reportes-preview/#reportes">Volver a Reportes</a></div>
+      <div class="reportes-header-actions"><a class="header-action" href="/reportes-preview/resumen.php">Volver a Resumen</a></div>
     </div>
   </header>
 
   <main class="shell reportes-main">
-    <nav class="section-nav" aria-label="Secciones de Reportes">
-      <span class="section-nav-label">Secciones</span>
-      <a href="/reportes-preview/#nuevo-reporte">Nuevo reporte</a>
-      <a href="/reportes-preview/#resumen">Resumen</a>
-      <a href="/reportes-preview/#reportes">Reportes</a>
-    </nav>
+    <section class="report-menu" aria-label="Módulos de Reportes">
+      <a class="report-menu-card" href="/reportes-preview/resumen.php"><strong>Resumen</strong><small>Indicadores, filtros y seguimiento.</small></a>
+      <a class="report-menu-card" href="/reportes-preview/nuevo.php"><strong>Nuevo reporte</strong><small>Registrar una incidencia.</small></a>
+    </section>
 
     <?php if ($error !== ''): ?>
       <section class="reportes-note reportes-note-error"><div><span class="reportes-kicker">Error</span><h2>No fue posible abrir el reporte</h2><p><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p></div></section>
