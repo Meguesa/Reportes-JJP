@@ -6,6 +6,6 @@ require_once dirname(__DIR__) . '/includes/bootstrap.php';
 portal_require_authentication();
 
 $query = $_SERVER['QUERY_STRING'] ?? '';
-$target = '/reportes-preview/resumen.php' . ($query !== '' ? '?' . $query : '');
+$target = '/reportes/resumen.php' . ($query !== '' ? '?' . $query : '');
 header('Location: ' . $target, true, 302);
 exit;
