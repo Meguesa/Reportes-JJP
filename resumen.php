@@ -30,6 +30,13 @@ $status = trim((string) ($_GET['estatus'] ?? ''));
 $area = trim((string) ($_GET['area'] ?? ''));
 $priority = trim((string) ($_GET['prioridad'] ?? ''));
 $createdFolio = trim((string) ($_GET['creado'] ?? ''));
+$view = strtolower(trim((string) ($_GET['view'] ?? 'pendientes')));
+if (!in_array($view, ['pendientes', 'solucionados', 'todos'], true)) $view = 'pendientes';
+
+if ($status === '') {
+    if ($view === 'pendientes') $status = 'Pendiente';
+    if ($view === 'solucionados') $status = 'Solucionado';
+}
 
 $flash = $_SESSION['reportes_flash'] ?? null;
 if (is_array($flash)) {
@@ -116,25 +123,55 @@ function resumen_render_rows(array $items, string $emptyMessage): void
   <meta name="theme-color" content="#ffffff">
   <title>Resumen | Reportes</title>
   <link rel="stylesheet" href="/reportes/styles.css?v=20260918-summary-1">
-  <link rel="stylesheet" href="/reportes/styles-sections.css?v=20260918-summary-1">
+  <link rel="stylesheet" href="/reportes/styles-sections.css?v=20261009-menu-1">
 </head>
 <body>
 <?php reportes_render_header($user); ?>
 
 <main class="shell reportes-main">
-  <section class="report-menu" aria-label="Módulos de Reportes">
-    <a class="report-menu-card is-active" href="/reportes/resumen.php">
-      <span class="report-menu-icon">▦</span>
-      <strong>Resumen</strong>
-      <small>Indicadores, filtros y seguimiento.</small>
-    </a>
+  <section class="reportes-intro-card">
+    <div>
+      <span class="reportes-menu-pill">REPORTES</span>
+      <h1>Mis reportes</h1>
+      <p>Registra incidencias, consulta su seguimiento y revisa los reportes visibles para tu área.</p>
+    </div>
+    <a class="reportes-secondary-button" href="/reportes/resumen.php?view=<?= urlencode($view) ?>">Actualizar</a>
+  </section>
+
+  <section class="reportes-menu-grid" aria-label="Opciones de Reportes">
     <?php if ($canCreate): ?>
-      <a class="report-menu-card" href="/reportes/nuevo.php">
-        <span class="report-menu-icon">＋</span>
-        <strong>Nuevo reporte</strong>
-        <small>Registrar una nueva incidencia.</small>
+      <a class="reportes-menu-card reportes-menu-card-new" href="/reportes/nuevo.php">
+        <span class="reportes-menu-icon">＋</span>
+        <div>
+          <strong>Nuevo reporte</strong>
+          <span>Registrar una nueva incidencia o solicitud de seguimiento.</span>
+        </div>
       </a>
     <?php endif; ?>
+
+    <a class="reportes-menu-card <?= $view === 'pendientes' ? 'active' : '' ?>" href="/reportes/resumen.php?view=pendientes">
+      <span class="reportes-menu-icon">◷</span>
+      <div>
+        <strong>Reportes pendientes</strong>
+        <span><b><?= (int)($counts['Pendiente'] ?? 0) ?></b> pendiente(s) de atención.</span>
+      </div>
+    </a>
+
+    <a class="reportes-menu-card <?= $view === 'solucionados' ? 'active' : '' ?>" href="/reportes/resumen.php?view=solucionados">
+      <span class="reportes-menu-icon">✓</span>
+      <div>
+        <strong>Reportes solucionados</strong>
+        <span><b><?= (int)($counts['Solucionado'] ?? 0) ?></b> solucionado(s).</span>
+      </div>
+    </a>
+
+    <a class="reportes-menu-card <?= $view === 'todos' ? 'active' : '' ?>" href="/reportes/resumen.php?view=todos">
+      <span class="reportes-menu-icon">▦</span>
+      <div>
+        <strong>Todos los reportes</strong>
+        <span><b><?= (int)($counts['Total'] ?? 0) ?></b> reporte(s) visibles para tu cuenta.</span>
+      </div>
+    </a>
   </section>
 
   <?php if ($createdFolio !== ''): ?>
