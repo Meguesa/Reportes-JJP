@@ -7,7 +7,7 @@ declare(strict_types=1);
  * La herramienta es dueña de toda la lógica de grupos, lista y adjuntos.
  */
 
-/** @return array{tenantId:string,clientId:string,clientSecret:string,siteId:string,pfxPath:string,pfxPassword:string} */
+/** @return array{tenantId:string,clientId:string,clientSecret:string,siteId:string,siteUrl:string,pfxPath:string,pfxPassword:string} */
 function reportes_sharepoint_config(): array
 {
     $candidatePaths = [
@@ -34,6 +34,7 @@ function reportes_sharepoint_config(): array
         'clientId' => trim((string) ($raw['reportes_client_id'] ?? $raw['portal_access_client_id'] ?? $raw['solicitud_backend_client_id'] ?? '')),
         'clientSecret' => trim((string) ($raw['reportes_client_secret'] ?? $raw['portal_access_client_secret'] ?? $raw['solicitud_backend_client_secret'] ?? '')),
         'siteId' => trim((string) ($raw['reportes_sharepoint_site_id'] ?? $raw['portal_access_sharepoint_site_id'] ?? $raw['solicitud_sharepoint_site_id'] ?? '')),
+        'siteUrl' => rtrim(trim((string) ($raw['reportes_sharepoint_site_url'] ?? $raw['portal_access_sharepoint_site_url'] ?? 'https://meguesajdjp.sharepoint.com/sites/CentroControlDireccion')), '/'),
         'pfxPath' => trim((string) ($raw['reportes_sharepoint_pfx_path'] ?? $raw['portal_access_sharepoint_pfx_path'] ?? $raw['solicitud_sharepoint_pfx_path'] ?? '')),
         'pfxPassword' => (string) ($raw['reportes_sharepoint_pfx_password'] ?? $raw['portal_access_sharepoint_pfx_password'] ?? $raw['solicitud_sharepoint_pfx_password'] ?? ''),
     ];
@@ -54,38 +55,62 @@ function reportes_sharepoint_config(): array
 /** @return array<string,mixed> */
 function reportes_remote_json(string $url, string $method, array $headers, ?string $body = null): array
 {
-    $curl = curl_init($url);
-    if ($curl === false) throw new RuntimeException('No fue posible inicializar cURL.');
+    $lastError = 'Error de comunicación no especificado.';
 
-    $options = [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_CONNECTTIMEOUT => 8,
-        CURLOPT_TIMEOUT => 20,
-        CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-    ];
-    if ($body !== null) $options[CURLOPT_POSTFIELDS] = $body;
-    curl_setopt_array($curl, $options);
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        $curl = curl_init($url);
+        if ($curl === false) throw new RuntimeException('No fue posible inicializar cURL.');
 
-    $response = curl_exec($curl);
-    $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $error = curl_error($curl);
-    curl_close($curl);
+        $options = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 12,
+            CURLOPT_TIMEOUT => 40,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ];
 
-    if ($response === false) throw new RuntimeException('La solicitud remota falló: ' . $error);
+        if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
+            $options[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+        }
 
-    $decoded = json_decode((string) $response, true);
-    if ($status < 200 || $status >= 300) {
-        $detail = is_array($decoded)
-            ? (string) ($decoded['error']['message'] ?? $decoded['error_description'] ?? '')
-            : '';
-        throw new RuntimeException('Servicio remoto respondió HTTP ' . $status . ($detail !== '' ? ': ' . $detail : '.'));
+        if ($body !== null) $options[CURLOPT_POSTFIELDS] = $body;
+        curl_setopt_array($curl, $options);
+
+        $response = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
+        curl_close($curl);
+
+        if ($response !== false) {
+            $decoded = json_decode((string) $response, true);
+
+            if ($status >= 200 && $status < 300) {
+                return is_array($decoded) ? $decoded : [];
+            }
+
+            $detail = is_array($decoded)
+                ? (string) ($decoded['error']['message'] ?? $decoded['error_description'] ?? '')
+                : '';
+            $lastError = 'Servicio remoto respondió HTTP ' . $status . ($detail !== '' ? ': ' . $detail : '.');
+
+            if (!in_array($status, [429, 500, 502, 503, 504], true) || $attempt === 3) {
+                throw new RuntimeException($lastError);
+            }
+        } else {
+            $lastError = 'La solicitud remota falló: ' . ($error !== '' ? $error : 'cURL ' . $errno);
+            if ($attempt === 3) {
+                throw new RuntimeException($lastError);
+            }
+        }
+
+        usleep(250000 * $attempt);
     }
 
-    return is_array($decoded) ? $decoded : [];
+    throw new RuntimeException($lastError);
 }
 
 function reportes_graph_app_token(array $config): string
@@ -198,8 +223,15 @@ function reportes_sharepoint_session(): array
     if (is_array($session)) return $session;
 
     $config = reportes_sharepoint_config();
-    $graphToken = reportes_graph_app_token($config);
-    $siteUrl = reportes_sharepoint_site_url($graphToken, $config['siteId']);
+    $siteUrl = rtrim(trim((string) ($config['siteUrl'] ?? '')), '/');
+
+    // El sitio de Reportes es fijo. Evitar una consulta adicional a Graph en
+    // cada carga reduce DNS, latencia y puntos de falla en el hosting.
+    if ($siteUrl === '') {
+        $graphToken = reportes_graph_app_token($config);
+        $siteUrl = reportes_sharepoint_site_url($graphToken, $config['siteId']);
+    }
+
     $host = strtolower((string) parse_url($siteUrl, PHP_URL_HOST));
     if ($host === '') throw new RuntimeException('No fue posible determinar el host de SharePoint.');
 
@@ -301,32 +333,98 @@ function reportes_group_diagnostics(string $email): array
 }
 
 /** @return string[] */
+function reportes_sharepoint_user_group_titles(string $email): array
+{
+    $session = reportes_sharepoint_session();
+    $odataEmail = str_replace("'", "''", trim($email));
+    $url = rtrim($session['siteUrl'], '/')
+        . "/_api/web/siteusers/getbyemail('"
+        . rawurlencode($odataEmail)
+        . "')/groups?$select=Title";
+
+    $data = reportes_remote_json($url, 'GET', [
+        'Authorization: Bearer ' . $session['token'],
+        'Accept: application/json;odata=nometadata',
+        'Content-Type: application/json;odata=nometadata',
+    ]);
+
+    $titles = [];
+    foreach (($data['value'] ?? []) as $row) {
+        if (!is_array($row)) continue;
+        $title = trim((string) ($row['Title'] ?? ''));
+        if ($title !== '') $titles[] = $title;
+    }
+
+    return $titles;
+}
+
+/** @return string[] */
 function reportes_user_areas(string $email): array
 {
     $email = strtolower(trim($email));
     if ($email === '') return [];
 
-    $areas = [];
-    foreach (reportes_group_aliases() as $area => $aliases) {
-        foreach ($aliases as $groupName) {
-            try {
-                $users = reportes_sharepoint_group_users($groupName);
-            } catch (Throwable $error) {
-                $message = $error->getMessage();
-                if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) continue;
-                throw $error;
-            }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $cached = $_SESSION['reportes_roles_cache'][$email] ?? null;
+        if (is_array($cached)
+            && isset($cached['at'], $cached['areas'])
+            && (time() - (int) $cached['at']) < 900
+            && is_array($cached['areas'])) {
+            return array_values($cached['areas']);
+        }
+    }
 
-            foreach ($users as $user) {
-                if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
+    $areas = [];
+
+    // Ruta rápida: obtener en una sola llamada todos los grupos del usuario.
+    try {
+        $groups = reportes_sharepoint_user_group_titles($email);
+        $normalizedGroups = array_map(static fn(string $value): string => mb_strtolower(trim($value), 'UTF-8'), $groups);
+
+        foreach (reportes_group_aliases() as $area => $aliases) {
+            foreach ($aliases as $groupName) {
+                if (in_array(mb_strtolower(trim($groupName), 'UTF-8'), $normalizedGroups, true)) {
                     $areas[strtolower($area)] = $area;
-                    break 2;
+                    break;
+                }
+            }
+        }
+    } catch (Throwable $fastError) {
+        // Compatibilidad: si getByEmail/groups no está disponible, conservar la
+        // resolución histórica por alias de grupo.
+        foreach (reportes_group_aliases() as $area => $aliases) {
+            foreach ($aliases as $groupName) {
+                try {
+                    $users = reportes_sharepoint_group_users($groupName);
+                } catch (Throwable $error) {
+                    $message = $error->getMessage();
+                    if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) continue;
+                    throw $error;
+                }
+
+                foreach ($users as $user) {
+                    if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
+                        $areas[strtolower($area)] = $area;
+                        break 2;
+                    }
                 }
             }
         }
     }
 
-    return array_values($areas);
+    $result = array_values($areas);
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        if (!isset($_SESSION['reportes_roles_cache']) || !is_array($_SESSION['reportes_roles_cache'])) {
+            $_SESSION['reportes_roles_cache'] = [];
+        }
+        $_SESSION['reportes_roles_cache'][$email] = [
+            'at' => time(),
+            'areas' => $result,
+        ];
+    }
+
+    return $result;
 }
 
 /** @return array<int,array<string,mixed>> */
