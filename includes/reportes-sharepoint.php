@@ -362,24 +362,32 @@ function reportes_sharepoint_user_group_titles(string $email): array
 function reportes_user_areas(string $email): array
 {
     $email = strtolower(trim($email));
-    if ($email === '') return [];
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return [];
 
     if (session_status() === PHP_SESSION_ACTIVE) {
         $cached = $_SESSION['reportes_roles_cache'][$email] ?? null;
         if (is_array($cached)
             && isset($cached['at'], $cached['areas'])
-            && (time() - (int) $cached['at']) < 900
             && is_array($cached['areas'])) {
-            return array_values($cached['areas']);
+            // Las asignaciones positivas se conservan 15 minutos; un resultado
+            // sin grupos dura solamente 60 segundos, para que una alta reciente
+            // en SharePoint se refleje sin conservar un falso rechazo.
+            $ttl = count($cached['areas']) > 0 ? 900 : 60;
+            if ((time() - (int) $cached['at']) < $ttl) {
+                return array_values($cached['areas']);
+            }
         }
     }
 
     $areas = [];
 
-    // Ruta rápida: obtener en una sola llamada todos los grupos del usuario.
+    // Primero consultar los grupos asociados directamente al usuario.
     try {
         $groups = reportes_sharepoint_user_group_titles($email);
-        $normalizedGroups = array_map(static fn(string $value): string => mb_strtolower(trim($value), 'UTF-8'), $groups);
+        $normalizedGroups = array_map(
+            static fn(string $value): string => mb_strtolower(trim($value), 'UTF-8'),
+            $groups
+        );
 
         foreach (reportes_group_aliases() as $area => $aliases) {
             foreach ($aliases as $groupName) {
@@ -390,20 +398,32 @@ function reportes_user_areas(string $email): array
             }
         }
     } catch (Throwable $fastError) {
-        // Compatibilidad: si getByEmail/groups no está disponible, conservar la
-        // resolución histórica por alias de grupo.
+        // No es seguro conceder acceso por un fallo de Graph/SharePoint.
+        // La ruta alternativa verifica la pertenencia real al grupo.
+        error_log('Reportes: consulta de grupos del usuario no disponible: ' . $fastError->getMessage());
+    }
+
+    // La consulta inicial puede devolver una lista vacia aun cuando el usuario
+    // figure en Reportes - Capillas (o en otro grupo) por su LoginName.
+    // Se debe ejecutar la ruta alternativa tambien cuando NO hubo excepcion.
+    if ($areas === []) {
         foreach (reportes_group_aliases() as $area => $aliases) {
             foreach ($aliases as $groupName) {
                 try {
                     $users = reportes_sharepoint_group_users($groupName);
                 } catch (Throwable $error) {
                     $message = $error->getMessage();
-                    if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) continue;
+                    if (strpos($message, 'HTTP 403') !== false || strpos($message, 'HTTP 404') !== false) {
+                        continue;
+                    }
+                    // Mantener visibles los errores operativos, sin
+                    // confundirlos con la ausencia de membresia.
                     throw $error;
                 }
 
-                foreach ($users as $user) {
-                    if ($user['email'] === $email || ($user['loginName'] !== '' && strpos($user['loginName'], $email) !== false)) {
+                foreach ($users as $member) {
+                    if ($member['email'] === $email
+                        || ($member['loginName'] !== '' && strpos($member['loginName'], $email) !== false)) {
                         $areas[strtolower($area)] = $area;
                         break 2;
                     }
@@ -413,7 +433,6 @@ function reportes_user_areas(string $email): array
     }
 
     $result = array_values($areas);
-
     if (session_status() === PHP_SESSION_ACTIVE) {
         if (!isset($_SESSION['reportes_roles_cache']) || !is_array($_SESSION['reportes_roles_cache'])) {
             $_SESSION['reportes_roles_cache'] = [];
